@@ -44,8 +44,22 @@ static void oledPower(bool on) {
 }
 
 void DebugScreen::show(const NodeConfig &cfg, bool radioOk, uint32_t seq) {
+    Serial.println("[oled] button/cmd accepted — powering Vext + init");
     oledPower(true);
-    if (!oledInit) { u8g2.begin(); oledInit = true; }
+    delay(50);                     /* let the panel's charge pump settle */
+    if (!oledInit) {
+        /* Probe the panel at the two common SSD1306 addresses. */
+        Wire.begin(OLED_SDA, OLED_SCL);
+        for (uint8_t a : {0x3C, 0x3D}) {
+            Wire.beginTransmission(a);
+            uint8_t err = Wire.endTransmission();
+            Serial.printf("[oled] i2c probe 0x%02X -> %s\n", a,
+                          err == 0 ? "ACK" : "no response");
+        }
+        u8g2.begin();
+        oledInit = true;
+        Serial.println("[oled] u8g2 init done");
+    }
     u8g2.setPowerSave(0);
     render(cfg, radioOk, seq);
     _visible = true;
