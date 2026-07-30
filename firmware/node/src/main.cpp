@@ -22,6 +22,8 @@
 #include "detector/StaLta.h"
 #include "radio/LoRaLink.h"
 #include "display/DebugScreen.h"
+#include "gps/GpsUart.h"
+#include <time.h>
 #include <Preferences.h>
 
 /* ---------- Persistent (RTC / NVS) state ---------- */
@@ -109,16 +111,30 @@ static uint16_t readBatteryMv() {
     return (uint16_t)(raw * 49 / 10);
 }
 
-/* ---------- GPS (stub until module wiring is fixed) ---------- */
+/* ---------- GPS (Heltec L76K GNSS plug-in module) ---------- */
 struct GpsFix { bool valid = false; int32_t lat_e7 = 0, lon_e7 = 0; uint32_t unix_time = 0; };
+static GpsUart gps;
+
 static GpsFix acquireGps(uint16_t timeout_s) {
-    /* TODO: wire to V4 GNSS UART / external module. Until then, no fix. */
-    (void)timeout_s;
-    return GpsFix{};
+    gps.powerOn();
+    GpsFixResult r = gps.acquire(timeout_s);
+    gps.powerOff();   /* module fully unpowered between fixes */
+    GpsFix f;
+    f.valid = r.valid;
+    f.lat_e7 = r.lat_e7;
+    f.lon_e7 = r.lon_e7;
+    f.unix_time = r.unix_time;
+    if (r.valid)
+        Serial.printf("[gps] fix: %.7f, %.7f sats=%u hdop=%.1f\n",
+                      r.lat_e7 / 1e7, r.lon_e7 / 1e7, r.sats, r.hdop_x10 / 10.0);
+    return f;
 }
 
 static uint32_t nowUnix(const GpsFix &fix) {
-    if (fix.valid) return fix.unix_time;
+    if (fix.valid && fix.unix_time) return fix.unix_time;
+    /* System clock is synced to UTC on any prior GPS fix (settimeofday). */
+    time_t t = time(nullptr);
+    if (t > 1700000000) return (uint32_t)t;
     /* Fallback: relative time; gateway stamps receipt time (spec §9). */
     return (uint32_t)(millis() / 1000);
 }
@@ -227,6 +243,8 @@ static void printHelp() {
         "  selftest             run front-end self test\n"
         "  seqreset             reset SEQ to 0 (ONLY after PSK rotation)\n"
         "  screen               show link-debug page on the OLED (or press PRG)\n"
+        "  gpstest [secs]       stream raw NMEA from the L76K (default 30s)\n"
+        "  gpsfix               acquire+print a parsed GPS fix\n"
         "  sleep                enter deep sleep now\n"
         "  reboot");
 }
@@ -287,6 +305,21 @@ static void handleCli(String line) {
                        "and re-registration at the gateway.");
     }
     else if (cmd == "screen") dbgScreen.show(cfg, radioOk, rtc_seq);
+    else if (cmd.startsWith("gpstest")) {
+        uint16_t secs = (uint16_t)cmd.substring(7).toInt();
+        if (secs == 0) secs = 30;
+        Serial.printf("Powering L76K, streaming raw NMEA for %us "
+                      "(look for $GxRMC with status 'A')...\n", secs);
+        gps.powerOn();
+        gps.passthrough(Serial, secs);
+        gps.powerOff();
+        Serial.println("\n[gps] done. `gpsfix` attempts a parsed fix.");
+    }
+    else if (cmd == "gpsfix") {
+        Serial.printf("Acquiring fix (timeout %us)...\n", cfg.gps_fix_timeout_s);
+        GpsFix f = acquireGps(cfg.gps_fix_timeout_s);
+        if (!f.valid) Serial.println("[gps] NO FIX (needs sky view; cold start can take 30-60s)");
+    }
     else if (cmd == "sleep") goToSleep();
     else if (cmd == "reboot") ESP.restart();
     else Serial.println("unknown command — try `help`");

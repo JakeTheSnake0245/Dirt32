@@ -113,10 +113,32 @@ single encrypted, single-shot frame (no retransmit burst). On the bench,
 `hb` sends one immediately without waiting for the timer.
 
 Heartbeats carry position, battery, tamper/motion-since-last-beat, noise
-floor, firmware version, and reset count. **Position note:** GPS is not
-wired yet (the V4 has no onboard GNSS) — heartbeats send the provisioned
-`fallback_lat_e7`/`fallback_lon_e7`, which is the intended steady state for
-buried nodes anyway (`set fallback_lat_e7 407128000` = 40.7128000°N).
+floor, firmware version, and reset count.
+
+### GPS (L76K GNSS plug-in module)
+
+The firmware drives the Heltec L76K module on the V4's GNSS port directly
+(UART GPIO38/39, power-enable GPIO34 active-low, standby GPIO40, reset
+GPIO42 — matching the V4 schematic). Behavior:
+
+- At each heartbeat (if `gps_enable 1`), the module is powered, given up to
+  `gps_fix_timeout_s` (default 60 s) to produce a fix, then **fully powered
+  off** — it draws nothing between beats.
+- On a fix, the heartbeat carries real coordinates and the node's clock is
+  synced to UTC, so alert timestamps are real time from then on.
+- No fix (buried antenna, cold start, no sky view) → falls back to the
+  provisioned `fallback_lat_e7`/`fallback_lon_e7`
+  (`set fallback_lat_e7 407128000` = 40.7128000°N). For buried nodes,
+  setting the fallback and `set gps_enable 0` saves the 60 s fix budget
+  every beat — position doesn't change once planted.
+- Bench check: `gpstest` streams raw NMEA for 30 s (you should see
+  `$GxRMC`/`$GxGGA` sentences immediately, status `A` once locked, outdoors);
+  `gpsfix` runs a full parsed acquisition and prints lat/lon/sats/HDOP.
+
+| Param               | Min | Max | Default = recommended | Why |
+|---------------------|-----|-----|-----------------------|-----|
+| `gps_enable`        | 0   | 1   | **1** (0 once planted)| Useful during install/survey; a buried node's position never changes, so turn it off and rely on the fallback to save battery |
+| `gps_fix_timeout_s` | 10  | 300 | **60**                | L76K cold start is 30-60 s with sky view; longer just drains the battery when buried |
 
 ### Detection / front-end parameters (sender-only, never affect compatibility)
 
