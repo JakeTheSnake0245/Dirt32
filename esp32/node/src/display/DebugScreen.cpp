@@ -179,7 +179,12 @@ void DebugScreen::show(const NodeConfig &cfg, bool radioOk, uint32_t seq) {
         delay(1000);
         oledInit = true;
     } else {
-        oledCmd(0xAF);                     /* display ON (wake) */
+        /* Re-run the full init on every wake: the SSD1315's charge pump
+           must be re-enabled after a display-off, or the panel stays dark
+           while still ACKing every write. Init is idempotent and takes
+           only a few ms. */
+        if (!oledPanelInit()) return;
+        Serial.println("[oled] re-init on wake OK");
     }
     render(cfg, radioOk, seq);
     _visible = true;
@@ -188,6 +193,7 @@ void DebugScreen::show(const NodeConfig &cfg, bool radioOk, uint32_t seq) {
 
 void DebugScreen::off() {
     if (oledInit) oledCmd(0xAE);           /* display OFF (sleep) */
+    Serial.println("[oled] off (sleep)");
     _visible = false;
     /* Leave Vext as-is: the sensor front-end shares the rail; main.cpp
        owns overall Ve power policy. */
