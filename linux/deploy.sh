@@ -10,6 +10,10 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 echo "== copying daemon files =="
 cp -r "$HERE/gatewayd/dirt32_gateway" /opt/dirt32/gatewayd/
 
+echo "== updating systemd service =="
+cp "$HERE/systemd/dirt32-gateway.service" /etc/systemd/system/dirt32-gateway.service
+systemctl daemon-reload
+
 echo "== restarting service =="
 systemctl restart dirt32-gateway
 sleep 2

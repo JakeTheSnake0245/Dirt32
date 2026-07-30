@@ -1,0 +1,40 @@
+krakenrf@krakensdr:~/Dirt32 $ cd ~/Dirt32 && git pull && sudo bash linux/deploy.sh
+remote: Enumerating objects: 9, done.
+remote: Counting objects: 100% (9/9), done.
+remote: Compressing objects: 100% (3/3), done.
+remote: Total 6 (delta 3), reused 6 (delta 3), pack-reused 0 (from 0)
+Unpacking objects: 100% (6/6), 1.46 KiB | 498.00 KiB/s, done.
+From https://github.com/JakeTheSnake0245/Dirt32
+   00d79fe..dca4bef  main       -> origin/main
+Updating 00d79fe..dca4bef
+Fast-forward
+ ...Pasted-krakenrf-krakensdr-Dirt32-sudo-journalctl-u-dirt32-gate_1785445891669.txt | 29 +++++++++++++++++++++++++++++
+ linux/deploy.sh                                                                     | 19 +++++++++++++++++++
+ 2 files changed, 48 insertions(+)
+ create mode 100644 attached_assets/Pasted-krakenrf-krakensdr-Dirt32-sudo-journalctl-u-dirt32-gate_1785445891669.txt
+ create mode 100644 linux/deploy.sh
+== copying daemon files ==
+== restarting service ==
+● dirt32-gateway.service - Dirt32 perimeter gateway (ingest + MQTT + web GUI)
+     Loaded: loaded (/etc/systemd/system/dirt32-gateway.service; enabled; preset: enabled)
+     Active: active (running) since Thu 2026-07-30 22:14:42 BST; 2s ago
+   Main PID: 83437 (python3)
+      Tasks: 3 (limit: 9573)
+        CPU: 96ms
+     CGroup: /system.slice/dirt32-gateway.service
+             └─83437 /usr/bin/python3 -m dirt32_gateway.main /etc/dirt32/gateway.json
+
+Done. Tail logs:  journalctl -u dirt32-gateway -f
+krakenrf@krakensdr:~/Dirt32 $ sudo journalctl -u dirt32-gateway -f
+Jul 30 22:12:17 krakensdr systemd[1]: Stopping dirt32-gateway.service - Dirt32 perimeter gateway (ingest + MQTT + web GUI)...
+Jul 30 22:12:17 krakensdr systemd[1]: dirt32-gateway.service: Deactivated successfully.
+Jul 30 22:12:17 krakensdr systemd[1]: Stopped dirt32-gateway.service - Dirt32 perimeter gateway (ingest + MQTT + web GUI).
+Jul 30 22:12:17 krakensdr systemd[1]: dirt32-gateway.service: Consumed 53.404s CPU time.
+Jul 30 22:12:17 krakensdr systemd[1]: Started dirt32-gateway.service - Dirt32 perimeter gateway (ingest + MQTT + web GUI).
+Jul 30 22:14:42 krakensdr systemd[1]: Stopping dirt32-gateway.service - Dirt32 perimeter gateway (ingest + MQTT + web GUI)...
+Jul 30 22:14:42 krakensdr systemd[1]: dirt32-gateway.service: Deactivated successfully.
+Jul 30 22:14:42 krakensdr systemd[1]: Stopped dirt32-gateway.service - Dirt32 perimeter gateway (ingest + MQTT + web GUI).
+Jul 30 22:14:42 krakensdr systemd[1]: dirt32-gateway.service: Consumed 9.737s CPU time.
+Jul 30 22:14:42 krakensdr systemd[1]: Started dirt32-gateway.service - Dirt32 perimeter gateway (ingest + MQTT + web GUI).
+^C
+krakenrf@krakensdr:~/Dirt32 $ 

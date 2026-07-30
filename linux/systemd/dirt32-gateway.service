@@ -10,6 +10,7 @@ Group=dirt32
 ExecStart=/usr/bin/python3 -m dirt32_gateway.main /etc/dirt32/gateway.json
 WorkingDirectory=/var/lib/dirt32
 Environment=PYTHONPATH=/opt/dirt32/gatewayd
+Environment=PYTHONUNBUFFERED=1
 Restart=always
 RestartSec=5
 # hardening
