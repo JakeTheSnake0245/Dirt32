@@ -1,0 +1,1 @@
+- [SPS firmware decisions](sps-firmware-decisions.md) — SEQ write-ahead nonce-safety scheme, no-wrap/rekey rule, exact dedupe pairs, single-shot heartbeats, host tests as contract gate.

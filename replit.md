@@ -1,6 +1,13 @@
-# [Project name]
+# Distributed Seismic Perimeter Sensor System
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+Firmware + protocol stack for a LoRa-linked buried seismic sensor network (nodes → relays → gateway → portal). Authoritative spec: `attached_assets/Pasted--Distributed-Seismic-Perimeter-Sensor-System-*.txt`.
+
+## Firmware (current focus)
+
+- `firmware/lib/sps_proto` — shared C99 wire protocol + ChaCha20-Poly1305 AEAD, replay window, relay dedupe. Reused verbatim by node, relay, and gateway tiers.
+- `firmware/node` — PlatformIO project for the Heltec V4 sensor node (front-end abstraction ADXL355/geophone, STA/LTA detector, LoRa TX + closed-loop ACK, NVS JSON config + serial CLI).
+- Host tests: `cd firmware/test/host && gcc ... && ./sps_test` (see `firmware/README.md`).
+- Hardware flashing happens on the user's machine via `pio run -t upload`; it cannot be done from this workspace.
 
 ## Run & Operate
 
