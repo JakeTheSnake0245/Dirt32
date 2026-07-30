@@ -1,0 +1,56 @@
+# Turnover: Fix Serial Framing Bug in the LoRa → MQTT Bridge
+
+## Context
+The gateway runs a Python service that reads decoded LoRa packets from an ESP32 over a serial (UART/USB) link and republishes them to MQTT. Each received packet is printed by the firmware as a single line:
+
+```
+RX <hex_payload> <rssi> <snr>
+```
+
+The bridge is currently rejecting most of these as "garbled." **This is a serial framing/buffer bug, not an RF or crypto problem** — over-the-air reception is healthy (RSSI is a steady ~−68 dBm on every line).
+
+## Symptom (from the service log)
+Repeated `[serial] dropped garbled RX line: ...` entries. The malformed lines show three distinct defects:
+1. **Doubled prefix** — lines begin with `RX RX ...` instead of a single `RX`.
+2. **Duplicated hex chunks mid-payload** — a 16-hex-char run repeats back-to-back inside the payload, and lines start and end with the same trailing bytes (e.g. `...3945b` `b2a639fb863a3945b` `c6a37f0`). Two "different" lines also share an identical middle section, which is impossible for distinct AEAD ciphertext — so it is the *same* packet being re-emitted corrupted, not two real packets.
+3. **Fragments** — short partial lines like `RX c6a37f0 -68 17`.
+
+## Root cause
+Inconsistent newline framing plus reused buffers that are not cleared/terminated between packets — on the firmware print side and/or the host read side. Symptom 2 specifically points to a hex buffer that retains stale trailing bytes from the previous (longer) packet.
+
+---
+
+## Task A — Python bridge (THIS repo — implement now)
+
+Rewrite the serial read/parse path to be strictly line-framed and self-recovering:
+
+1. **Frame only on `\n`.** Accumulate incoming bytes and split on newline (e.g. `serial.read_until(b"\n")`, or buffer bytes and split). Parse **only complete lines**; hold any trailing remainder until the next newline arrives. Do **not** use fixed-size `read(n)` slicing or a timeout so short that partial lines are returned as if complete.
+2. **Validate with a strict regex** before accepting a line:
+   ```
+   ^RX ([0-9a-fA-F]+) (-?\d+) (\d+)$
+   ```
+   Groups = hex payload, RSSI, SNR. Reject anything that doesn't match exactly.
+3. **On any mismatch, drop the line AND flush the accumulation buffer.** Do not carry a partial/garbled remainder into the next read — one bad frame must not poison the following line.
+4. **Deduplicate at the application layer, not in the parser.** After framing is clean, decode the packet and dedupe on `(NODE_ID, SEQ)`. Real over-the-air duplicates are expected here (nodes blind-retransmit, and the relay re-forwards), so they are handled correctly at this layer rather than being mistaken for framing errors.
+
+## Task B — Device firmware (SEPARATE ESP32 repo — must also be done)
+These are the source-side fixes; the bridge cannot fully compensate for them:
+
+1. **Emit the line in one atomic write.** Build the whole string with `snprintf` and send it with a single `Serial.write(buf, len)`:
+   ```c
+   int n = snprintf(buf, sizeof buf, "RX %s %d %d\n", hex, rssi, snr);
+   Serial.write((uint8_t*)buf, n);
+   ```
+   Remove any pattern of multiple `Serial.print(...)` calls per line — that is where the doubled `RX` and interleaving originate.
+2. **Re-terminate/clear the hex buffer every packet.** Set `hex[2*len] = '\0'` (or `memset` it) before each use so a shorter packet can't print stale trailing bytes from the previous one. If using an Arduino `String`, reset it to `""` per packet instead of appending.
+3. **Keep boot/debug logging off this UART** so ROM or debug output can't interleave with the `RX` lines.
+4. **Apply the same buffer hygiene to the TX encode path** — the `[serial] bridge: ERR TX hex` log line indicates the same fragility on encode.
+
+---
+
+## Acceptance criteria
+- No `RX RX` prefixes, no duplicated hex chunks, no fragment lines in the log.
+- Every well-formed packet is parsed exactly once and published to MQTT.
+- A garbled or partial input line never corrupts the parsing of the following line (verify by injecting junk mid-stream).
+- A known-good packet round-trips serial → parse → MQTT with its payload byte-for-byte intact.
+- Duplicate packets (same `NODE_ID`,`SEQ`) are collapsed at the app layer, not dropped as "garbled."

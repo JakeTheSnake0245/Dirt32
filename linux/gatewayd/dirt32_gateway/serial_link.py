@@ -9,9 +9,15 @@ Bridge line protocol (see esp32/gateway-bridge/src/main.cpp):
 """
 from __future__ import annotations
 import os
+import re
 import termios
 import threading
 import time
+
+# Strict pattern — exactly one hex token (even length), signed RSSI, signed SNR.
+_RX_RE = re.compile(
+    r'^RX ([0-9a-fA-F]{2,128}) (-?\d+) (-?\d+)$'
+)
 
 
 class SerialLink:
@@ -104,38 +110,32 @@ class SerialLink:
             buf += chunk
             while b"\n" in buf:
                 line, buf = buf.split(b"\n", 1)
-                self._handle(line.decode(errors="replace").strip())
+                flush = self._handle(line.decode(errors="replace").strip())
+                if flush:
+                    buf = b""   # discard partial next line — one bad frame
+                    break       # must not poison the following read
 
-    def _handle(self, line: str):
-        """A malformed bridge line must never kill the reader thread."""
-        try:
-            if not line:
-                return
-            if line.startswith("RX "):
-                parts = line.split()
-                # Scan for the first token that is a non-empty even-length
-                # hex string.  Under normal operation parts[1] is correct, but
-                # if the bridge emitted a spurious "RX " prefix (USB-CDC split)
-                # we may see "RX RX <hex> …" and need to skip the extra token.
-                hex_idx = None
-                _hex_chars = set("0123456789abcdefABCDEF")
-                for i, tok in enumerate(parts[1:], start=1):
-                    if tok and len(tok) % 2 == 0 and all(c in _hex_chars for c in tok):
-                        hex_idx = i
-                        break
-                if hex_idx is None:
-                    self.log(f"[serial] dropped garbled RX line: {line!r}")
-                    return
-                frame = bytes.fromhex(parts[hex_idx])
-                def _i(s):
-                    try: return int(s)
-                    except (ValueError, TypeError): return None
-                rssi = _i(parts[hex_idx + 1]) if len(parts) > hex_idx + 1 else None
-                # SNR sent as snr*10 integer to avoid float printf bugs
-                snr_raw = _i(parts[hex_idx + 2]) if len(parts) > hex_idx + 2 else None
-                snr = snr_raw / 10.0 if snr_raw is not None else None
+    def _handle(self, line: str) -> bool:
+        """Process one bridge line.  Returns True if the caller should flush
+        the accumulation buffer (garbled frame — don't let the remainder
+        corrupt the next line).  A malformed line must never kill the thread."""
+        if not line:
+            return False
+        if line.startswith("RX "):
+            m = _RX_RE.match(line)
+            if not m:
+                self.log(f"[serial] dropped garbled RX line: {line!r}")
+                return True   # flush — outside try/except so it always returns
+            try:
+                frame = bytes.fromhex(m.group(1))
+                rssi = int(m.group(2))
+                snr  = int(m.group(3)) / 10.0   # snr*10 integer from bridge
                 self.on_frame(frame, rssi, snr)
-            elif line == "RDY":
+            except Exception as e:        # noqa: BLE001
+                self.log(f"[serial] error dispatching frame: {e}")
+            return False
+        try:
+            if line == "RDY":
                 # Bridge (re)booted — it is back on its default radio config,
                 # so always reapply ours. Guard against CFG->RDY echo loops.
                 self.log("[serial] bridge ready — syncing radio config")
@@ -149,6 +149,7 @@ class SerialLink:
                     self._send_cfg()
         except Exception as e:            # noqa: BLE001 — reader must survive
             self.log(f"[serial] error handling line {line!r}: {e}")
+        return False
 
     def start(self):
         t = threading.Thread(target=self.run, daemon=True, name="serial")
