@@ -143,6 +143,7 @@ GPIO42 — matching the V4 schematic). Behavior:
 | Param               | Min | Max | Default = recommended | Why |
 |---------------------|-----|-----|-----------------------|-----|
 | `gps_enable`        | 0   | 1   | **1** (0 once planted)| Useful during install/survey; a buried node's position never changes, so turn it off and rely on the fallback to save battery |
+| `solar_sense_gpio`  | -1  | 48  | **-1** (off)          | Optional. Charging is pure hardware — the V4's charge IC charges the battery whenever 5 V is present (USB or solar), nothing to enable. Set this to a free GPIO (avoid 2/5/7/46 — RF front-end) wired to the panel rail through a ~100k/100k divider, and heartbeats will report the ON_SOLAR flag so the gateway can see the panel producing |
 | `gps_fix_timeout_s` | 10  | 300 | **60**                | L76K cold start is 30-60 s with sky view; longer just drains the battery when buried |
 
 ### Detection / front-end parameters (sender-only, never affect compatibility)

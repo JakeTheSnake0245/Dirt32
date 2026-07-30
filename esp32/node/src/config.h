@@ -49,6 +49,11 @@ struct NodeConfig {
 
     /* GPS */
     bool     gps_enable      = true;
+    /* Solar sense: GPIO reading the panel/5V rail through a divider
+       (e.g. 100k/100k). -1 = disabled. When high, the heartbeat sets the
+       ON_SOLAR health flag. Charging itself is pure hardware — the V4's
+       charge IC needs no firmware involvement. */
+    int8_t   solar_sense_gpio = -1;
     uint16_t gps_fix_timeout_s = 60;
 
     /* Fallback position (used when no GPS fix; provisioning record §11) */

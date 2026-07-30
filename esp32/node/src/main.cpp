@@ -111,6 +111,17 @@ static uint16_t readBatteryMv() {
     return (uint16_t)(raw * 49 / 10);
 }
 
+/* ---------- Solar sense (optional) ----------
+ * Charging is pure hardware: the V4's charge-management IC charges the
+ * battery whenever 5 V is present (USB or solar) — nothing to enable here.
+ * This only *reports* it: if solar_sense_gpio is set, a divided-down panel
+ * rail is read and the ON_SOLAR health flag is set in heartbeats. */
+static bool onSolar() {
+    if (cfg.solar_sense_gpio < 0) return false;
+    pinMode((uint8_t)cfg.solar_sense_gpio, INPUT);
+    return digitalRead((uint8_t)cfg.solar_sense_gpio) == HIGH;
+}
+
 /* ---------- GPS (Heltec L76K GNSS plug-in module) ---------- */
 struct GpsFix { bool valid = false; int32_t lat_e7 = 0, lon_e7 = 0; uint32_t unix_time = 0; };
 static GpsUart gps;
@@ -171,7 +182,8 @@ static void sendHeartbeat() {
     hb.health_flags = (sensorOk ? SPS_HF_SENSOR_OK : 0) |
                       (fix.valid ? SPS_HF_GPS_FIX : 0) |
                       (selfTestOk ? SPS_HF_SELFTEST : 0) |
-                      (rtc_tamper ? SPS_HF_TAMPER : 0);
+                      (rtc_tamper ? SPS_HF_TAMPER : 0) |
+                      (onSolar() ? SPS_HF_ON_SOLAR : 0);
     hb.noise_floor = detector.noiseFloor();
     hb.fw_version = SPS_FW_VERSION;
     hb.reset_count = rtc_reset_count;
