@@ -44,21 +44,39 @@ static void oledPower(bool on) {
 }
 
 void DebugScreen::show(const NodeConfig &cfg, bool radioOk, uint32_t seq) {
+    Serial.println("[oled] show() called");
     oledPower(true);
     if (!oledInit) {
         /* Verified on real V4 hardware: SSD1315 panel at I2C 0x3C,
-           SDA=17 SCL=18, powered by Vext (LOW=on). It needs a longer
-           reset pulse + settle than u8g2's default before it will ACK. */
+           SDA=17 SCL=18, powered by Vext (LOW=on). Give the panel a
+           proper reset pulse before init. */
         delay(100);                          /* Vext + charge pump settle */
         Wire.begin(OLED_SDA, OLED_SCL);
         pinMode(OLED_RST, OUTPUT);
         digitalWrite(OLED_RST, LOW);  delay(10);
         digitalWrite(OLED_RST, HIGH); delay(50);
-        u8g2.begin();
+        u8g2.setI2CAddress(0x3C << 1);       /* be explicit */
+        bool ok = u8g2.begin();
+        Serial.printf("[oled] u8g2.begin() -> %s\n", ok ? "true" : "false");
+        u8g2.setBusClock(400000);
+        u8g2.setContrast(255);
+        /* post-init probe: is the panel still ACKing after begin()? */
+        Wire.beginTransmission(0x3C);
+        Serial.printf("[oled] post-init probe 0x3C -> %s\n",
+                      Wire.endTransmission() == 0 ? "ACK" : "no response");
+        /* test pattern: light EVERY pixel for 1 s — if you don't see a
+           fully lit rectangle, pixel data isn't reaching the panel */
+        u8g2.setPowerSave(0);
+        u8g2.clearBuffer();
+        u8g2.drawBox(0, 0, 128, 64);
+        u8g2.sendBuffer();
+        Serial.println("[oled] test pattern (all pixels ON) sent");
+        delay(1000);
         oledInit = true;
     }
     u8g2.setPowerSave(0);
     render(cfg, radioOk, seq);
+    Serial.println("[oled] page rendered");
     _visible = true;
     _shownAt = millis();
 }
