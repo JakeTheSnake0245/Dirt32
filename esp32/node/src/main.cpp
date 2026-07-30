@@ -281,7 +281,12 @@ static void handleCli(String line) {
         for (size_t i = 0; i < SPS_KEY_LEN; i++) cfg.psk[i] = (uint8_t)esp_random();
         Serial.print("psk ");
         for (size_t i = 0; i < SPS_KEY_LEN; i++) Serial.printf("%02x", cfg.psk[i]);
-        Serial.println("\nRegister this key for this node_id at the gateway, then `save`.");
+        /* Ready-to-paste entry for the Pi's /etc/dirt32/keys.json */
+        Serial.printf("\n\nkeys.json entry (paste inside the { }):\n  \"%u\": \"",
+                      cfg.node_id);
+        for (size_t i = 0; i < SPS_KEY_LEN; i++) Serial.printf("%02x", cfg.psk[i]);
+        Serial.println("\"");
+        Serial.println("Register at the gateway, then `save` here.");
     }
     else if (cmd == "taptest") {
         uint8_t cls = rest.isEmpty() ? SPS_EV_FOOTSTEP : (uint8_t)rest.toInt();
