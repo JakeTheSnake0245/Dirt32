@@ -1,4 +1,7 @@
-# SPS Firmware — Distributed Seismic Perimeter Sensor System
+# Dirt32 — Distributed Seismic Perimeter Sensor Firmware
+
+Buried LoRa sensor nodes that detect footsteps and vehicles and report them
+over an encrypted, replay-protected radio link.
 
 Implements the node tier and the shared wire protocol from the build spec
 (`attached_assets/Pasted--Distributed-Seismic-Perimeter-Sensor-System-*.txt`).

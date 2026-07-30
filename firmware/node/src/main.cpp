@@ -1,5 +1,5 @@
 /*
- * main.cpp — Distributed Seismic Perimeter Sensor: node firmware.
+ * main.cpp — Dirt32 (distributed seismic perimeter sensor): node firmware.
  * Heltec WiFi LoRa 32 V4 (ESP32-S3 + SX1262), spec §5.
  *
  * Flow (spec §5.2):
@@ -344,7 +344,7 @@ void setup() {
 
     if (coldBoot) {
         delay(1500); /* give USB serial a moment on the bench */
-        Serial.println("\n=== SPS node ===");
+        Serial.println("\n=== Dirt32 node ===");
         Serial.printf("node_id=%u net_id=%u fw=%d reset_reason=%d\n",
                       cfg.node_id, cfg.net_id, SPS_FW_VERSION, (int)rr);
     }

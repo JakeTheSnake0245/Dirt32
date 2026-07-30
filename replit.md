@@ -1,4 +1,4 @@
-# Distributed Seismic Perimeter Sensor System
+# Dirt32 — Distributed Seismic Perimeter Sensor System
 
 Firmware + protocol stack for a LoRa-linked buried seismic sensor network (nodes → relays → gateway → portal). Authoritative spec: `attached_assets/Pasted--Distributed-Seismic-Perimeter-Sensor-System-*.txt`.
 
