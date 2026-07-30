@@ -198,8 +198,11 @@ static void sendHeartbeat(bool deployFlag = false) {
     /* Heartbeats are single-shot TX — no retransmit burst, no ACK window. */
     bool ok = link_.sendOnce(frame, (size_t)n);
     rtc_tamper = false;
-    Serial.printf("[hb] seq=%lu batt=%umV%s -> %s\n", (unsigned long)seq,
-                  hb.battery_mv, deployFlag ? " DEPLOY" : "",
+    Serial.printf("[hb] seq=%lu batt=%umV%s lat=%.6f lon=%.6f gps=%s -> %s\n",
+                  (unsigned long)seq, hb.battery_mv,
+                  deployFlag ? " DEPLOY" : "",
+                  hb.lat_e7 / 1e7, hb.lon_e7 / 1e7,
+                  (hb.health_flags & SPS_HF_GPS_FIX) ? "FIX" : "fallback",
                   ok ? "sent" : "RADIO ERROR");
 }
 
