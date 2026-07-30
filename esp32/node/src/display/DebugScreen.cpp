@@ -181,14 +181,6 @@ void DebugScreen::show(const NodeConfig &cfg, bool radioOk, uint32_t seq) {
         if (!oledPanelInit()) return;
         Serial.printf("[oled] t=%lu re-init on wake OK\n", (unsigned long)millis());
     }
-    /* Diagnostic (every show): all pixels ON for 300 ms. If you see this
-       flash but not the page after it, the panel displays dense data but
-       not the sparse text buffer — report exactly that. */
-    memset(fb, 0xFF, sizeof(fb));
-    if (!oledFlush()) return;
-    Serial.printf("[oled] t=%lu test pattern (all pixels ON) sent OK\n",
-                  (unsigned long)millis());
-    delay(300);
     render(cfg, radioOk, seq);
     _visible = true;
     _shownAt = millis();
@@ -229,11 +221,7 @@ void DebugScreen::render(const NodeConfig &cfg, bool radioOk, uint32_t seq) {
              radioOk ? "OK" : "FAIL");
     fbText(0, 7, line);
 
-    int lit = 0;
-    for (size_t i = 0; i < sizeof(fb); i++) if (fb[i]) lit++;
     if (!oledFlush()) Serial.println("[oled] render flush failed");
-    else Serial.printf("[oled] t=%lu page flushed (%d non-zero bytes in buffer)\n",
-                       (unsigned long)millis(), lit);
 }
 
 void DebugScreen::poll(const NodeConfig &cfg, bool radioOk, uint32_t seq) {
