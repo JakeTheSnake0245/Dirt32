@@ -8,3 +8,4 @@ description: Non-obvious security/protocol decisions for the seismic sensor firm
 - Heartbeats are single-shot TX (LoRaLink::sendOnce), alerts use retransmit+ACK (sendReliable). Don't "unify" them.
 - Host test suite (gcc, esp32/test/host) is the contract gate — run it after any sps_proto change. Struct memcmp in tests fails on padding; compare fields.
 - Hardware note: `taptest` CLI path exists for radio-only bench verification.
+- Heltec V4 hardware truths confirmed on real board: ESP32-S3 GPIO 26-32 are flash/PSRAM pins — assigning them (e.g. as sensor CS) causes a TG1WDT boot loop. Vext GPIO36 is ACTIVE-LOW (powers OLED + LoRa antenna boost). Native USB needs ARDUINO_USB_MODE=1 + ARDUINO_USB_CDC_ON_BOOT=1 or Serial is silent. OLED pins same as V3: SDA17/SCL18/RST21, button GPIO0.

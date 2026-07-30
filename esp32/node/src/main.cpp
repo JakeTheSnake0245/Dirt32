@@ -93,12 +93,12 @@ static void seqRestore() {
 /* ---------- Ve sensor power rail (spec §5.2 — verify polarity!) ---------- */
 static void vePower(bool on) {
     pinMode(PIN_VE, OUTPUT);
-    /* NOTE: Heltec docs conflict on GPIO36/Ve polarity (spec §12). Default
-       active-HIGH; flip VE_ACTIVE_LOW if your board proves otherwise. */
-#ifdef VE_ACTIVE_LOW
-    digitalWrite(PIN_VE, on ? LOW : HIGH);
-#else
+    /* Vext (GPIO36) is ACTIVE-LOW on the Heltec V4 (confirmed against
+       Meshtastic's V4 board support). Define VE_ACTIVE_HIGH to flip. */
+#ifdef VE_ACTIVE_HIGH
     digitalWrite(PIN_VE, on ? HIGH : LOW);
+#else
+    digitalWrite(PIN_VE, on ? LOW : HIGH);
 #endif
     if (on) delay(15);
 }
@@ -366,18 +366,22 @@ void setup() {
     }
 
     /* Radio first — it is needed on every path. */
+    Serial.println("[boot] radio init...");
     radioOk = link_.begin(cfg);
-    if (!radioOk) Serial.println("[radio] SX1262 init FAILED");
+    Serial.println(radioOk ? "[boot] radio OK" : "[radio] SX1262 init FAILED");
 
     /* Front-end */
+    Serial.println("[boot] sensor rail + SPI...");
     vePower(true);
     SPI.begin();
     static Adxl355FrontEnd adxl(SPI, PIN_ADXL_CS, PIN_ADXL_INT1);
     static GeophoneFrontEnd geo(SPI, PIN_ADS_CS, PIN_ADS_DRDY);
     frontEnd = (cfg.front_end == FE_ADXL355)
                    ? (FrontEnd *)&adxl : (FrontEnd *)&geo;
+    Serial.println("[boot] sensor front-end init...");
     sensorOk = frontEnd->begin(cfg.sample_rate_hz);
     if (!sensorOk) Serial.println("[sensor] front-end init FAILED (taptest still works)");
+    Serial.println("[boot] detector init...");
 
     DetectorConfig dc = { cfg.sample_rate_hz, cfg.hpf_hz, cfg.sta_ms, cfg.lta_ms,
                           cfg.trigger_ratio, cfg.footstep_lo_hz, cfg.footstep_hi_hz,
