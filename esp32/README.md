@@ -9,11 +9,13 @@ Implements the node tier and the shared wire protocol from the build spec
 ## Layout
 
 ```
-firmware/
+esp32/
 ├── lib/sps_proto/        Shared protocol + crypto (pure C99, no deps)
 │   ├── sps_proto.h/.c    Frame pack/parse, AEAD seal/open, replay, dedupe
 │   └── chacha20poly1305  RFC 8439 AEAD implementation
 ├── test/host/            Host-side test suite (gcc, runs anywhere)
+│                         + make_vectors.c — frames for the Python gateway tests
+├── gateway-bridge/       USB radio bridge for the Pi gateway (holds no keys)
 └── node/                 Sensor node firmware (PlatformIO, Heltec V4)
     └── src/
         ├── main.cpp              Boot/state machine, CLI, sleep logic
@@ -30,7 +32,7 @@ firmware/
 ## Run the protocol tests (host, no hardware)
 
 ```sh
-cd firmware/test/host
+cd esp32/test/host
 gcc -std=c99 -Wall -Wextra -O2 -I../../lib/sps_proto \
     ../../lib/sps_proto/chacha20poly1305.c ../../lib/sps_proto/sps_proto.c \
     test_main.c -o sps_test && ./sps_test
@@ -44,7 +46,7 @@ ALERT→ACK→forged-ACK-rejected scenario.
 ## Build & flash the node
 
 ```sh
-cd firmware/node
+cd esp32/node
 pio run -t upload        # then: pio device monitor -b 115200
 ```
 

@@ -10,9 +10,9 @@ battery.
 ## How it works
 
 ```
-[buried node] --LoRa 903 MHz--> [relay] --927 MHz--> [gateway] --> [map/alerts]
- ESP32-S3 + SX1262                                    (planned)      (planned)
- ADXL355 or geophone
+[buried node] ~~LoRa 903 MHz~~> [bridge ESP32 on USB] --> [Pi gateway] --> map GUI
+ ESP32-S3 + SX1262                 dumb radio bridge      decrypt/verify   MQTT out
+ ADXL355 or geophone               (holds no keys)        SQLite store
 ```
 
 - **Detection** — STA/LTA trigger on the seismic signal, with a band-split
@@ -38,36 +38,51 @@ battery.
 ## Repository layout
 
 ```
-firmware/
-├── lib/sps_proto/   Shared wire protocol + crypto (pure C99, no deps)
-├── node/            Sensor node firmware (PlatformIO)
-└── test/host/       Protocol/crypto test suite — runs on any machine, no hardware
+esp32/                        — everything that runs on a Heltec board
+├── lib/sps_proto/            Shared wire protocol + crypto (pure C99, no deps)
+├── node/                     Buried sensor node firmware (PlatformIO)
+├── gateway-bridge/           USB radio bridge for the Pi (holds no keys)
+└── test/host/                Protocol/crypto tests + cross-language vectors
+
+linux/                        — everything that runs on the Raspberry Pi
+├── gatewayd/                 Gateway daemon (pure Python stdlib)
+│   ├── dirt32_gateway/       ingest, crypto, SQLite, MQTT, web GUI
+│   └── tests/                Python↔C cross-verification tests
+├── systemd/ + install.sh     One-command Ubuntu install
+└── README.md                 Gateway setup, MQTT topics, GUI docs
 ```
 
 ## Quick start
 
 ```sh
 # run the protocol + crypto tests (no hardware needed)
-cd firmware/test/host
+cd esp32/test/host
 gcc -std=c99 -Wall -Wextra -O2 -I../../lib/sps_proto \
     ../../lib/sps_proto/chacha20poly1305.c ../../lib/sps_proto/sps_proto.c \
     test_main.c -o sps_test && ./sps_test
 
 # flash a node
-cd firmware/node && pio run -t upload && pio device monitor -b 115200
+cd esp32/node && pio run -t upload && pio device monitor -b 115200
+
+# run the gateway with a simulated perimeter (no hardware needed)
+cd linux/gatewayd && python3 tests/test_proto.py     # crypto cross-check vs C
+echo '{"simulator": true, "mqtt": {"enabled": false}}' > /tmp/sim.json
+python3 -m dirt32_gateway.main /tmp/sim.json         # GUI at :8080
 ```
 
 Then on the serial CLI: `keygen`, `set node_id 1`, `set net_id 7`, `save` —
 and press the **PRG button** to get an OLED debug page showing every
 parameter (plus a key fingerprint) that must match between boards.
 
-**Full documentation — configuration reference with recommended settings,
-bench workflow, GPS, debug screen, security model — is in
-[`firmware/README.md`](firmware/README.md).**
+**Full documentation:**
+[`esp32/README.md`](esp32/README.md) — node configuration reference, bench
+workflow, GPS, debug screen, security model.
+[`linux/README.md`](linux/README.md) — gateway install, MQTT topics,
+map GUI, key management.
 
 ## Status
 
-- ✅ Node firmware + shared protocol library (this repo)
+- ✅ Node firmware + shared protocol library
+- ✅ Gateway bridge firmware (radio ↔ USB serial, no keys on board)
+- ✅ Pi gateway daemon — decrypt/verify/store, MQTT publisher, map GUI
 - 🔜 Relay firmware (extends range beyond direct radio reach)
-- 🔜 Gateway ingest (decrypt, verify, store)
-- 🔜 Live map portal

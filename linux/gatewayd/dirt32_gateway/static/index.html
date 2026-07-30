@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dirt32 — Perimeter</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  :root {
+    --bg: #0b0e11; --panel: #12161b; --edge: #1f2730;
+    --text: #c9d4dd; --dim: #66727e;
+    --green: #2ecc71; --yellow: #f1c40f; --red: #e74c3c;
+    font-family: "SF Mono", "Cascadia Mono", Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--bg); color: var(--text); height: 100vh;
+         display: flex; flex-direction: column; overflow: hidden; }
+  header { padding: 10px 16px; border-bottom: 1px solid var(--edge);
+           display: flex; align-items: baseline; gap: 16px; }
+  header h1 { font-size: 15px; letter-spacing: 3px; color: #e8eef3; }
+  header .sub { color: var(--dim); font-size: 11px; }
+  #counts { margin-left: auto; font-size: 12px; display: flex; gap: 14px; }
+  .dotlbl::before { content: "●"; margin-right: 5px; }
+  .g::before { color: var(--green); } .y::before { color: var(--yellow); }
+  .r::before { color: var(--red); }
+  main { flex: 1; display: flex; min-height: 0; }
+  #map { flex: 1; background: #0b0e11; }
+  aside { width: 340px; border-left: 1px solid var(--edge); display: flex;
+          flex-direction: column; min-height: 0; }
+  aside h2 { font-size: 11px; letter-spacing: 2px; color: var(--dim);
+             padding: 10px 14px 6px; text-transform: uppercase; }
+  #nodes { overflow-y: auto; border-bottom: 1px solid var(--edge);
+           max-height: 45%; }
+  .node { padding: 8px 14px; border-bottom: 1px solid #151b21; cursor: pointer;
+          font-size: 12px; }
+  .node:hover { background: var(--panel); }
+  .node .st::before { content: "●"; margin-right: 7px; }
+  .node .meta { color: var(--dim); font-size: 11px; margin-top: 2px; }
+  #feed { flex: 1; overflow-y: auto; }
+  .ev { padding: 7px 14px; font-size: 11.5px; border-bottom: 1px solid #151b21; }
+  .ev .t { color: var(--dim); margin-right: 8px; }
+  .ev.alert { border-left: 3px solid var(--red); background: #16100f; }
+  .ev.heartbeat { border-left: 3px solid #223042; }
+  .ev.status { border-left: 3px solid #2a2a1a; color: var(--dim); }
+  .leaflet-container { font: inherit; }
+  .leaflet-tile { filter: grayscale(1) invert(1) brightness(0.7) contrast(1.2); }
+  .pulse { animation: pulse 1.2s ease-out infinite; }
+  @keyframes pulse { 0% { opacity: .9 } 50% { opacity: .3 } 100% { opacity: .9 } }
+  #offline { position: absolute; top: 70px; right: 360px; z-index: 1000;
+             background: #3a1418; color: #ffb3b3; padding: 6px 12px;
+             font-size: 12px; border: 1px solid #6b2229; display: none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>DIRT32</h1>
+  <span class="sub">perimeter status</span>
+  <div id="counts">
+    <span class="dotlbl g" id="cg">0</span>
+    <span class="dotlbl y" id="cy">0</span>
+    <span class="dotlbl r" id="cr">0</span>
+  </div>
+</header>
+<div id="offline">gateway unreachable</div>
+<main>
+  <div id="map"></div>
+  <aside>
+    <h2>Sensors</h2>
+    <div id="nodes"></div>
+    <h2>Live feed</h2>
+    <div id="feed"></div>
+  </aside>
+</main>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const COLORS = { green: "#2ecc71", yellow: "#f1c40f", red: "#e74c3c" };
+const base = location.pathname.replace(/\/$/, "");
+const api = p => fetch(base + p).then(r => r.json());
+
+const map = L.map("map", { zoomControl: false, attributionControl: false });
+L.control.zoom({ position: "bottomleft" }).addTo(map);
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+            { maxZoom: 19 }).addTo(map);
+map.setView([40.0176, -105.2797], 15);
+
+const markers = {};   // node_id -> circleMarker
+let fitted = false, lastEvt = 0;
+
+function fmtAgo(ts) {
+  if (!ts) return "never";
+  const s = Math.max(0, Date.now() / 1000 - ts);
+  if (s < 90) return Math.round(s) + "s ago";
+  if (s < 5400) return Math.round(s / 60) + "m ago";
+  return (s / 3600).toFixed(1) + "h ago";
+}
+
+function renderNodes(nodes) {
+  const counts = { green: 0, yellow: 0, red: 0 };
+  const list = document.getElementById("nodes");
+  list.innerHTML = "";
+  const pts = [];
+  for (const n of nodes) {
+    counts[n.color] = (counts[n.color] || 0) + 1;
+    const hasPos = n.lat || n.lon;
+    if (hasPos) {
+      pts.push([n.lat, n.lon]);
+      if (!markers[n.node_id]) {
+        markers[n.node_id] = L.circleMarker([n.lat, n.lon], {
+          radius: 9, weight: 2, fillOpacity: 0.85 }).addTo(map);
+      }
+      const m = markers[n.node_id];
+      m.setLatLng([n.lat, n.lon]);
+      m.setStyle({ color: COLORS[n.color], fillColor: COLORS[n.color] });
+      if (n.color === "red") m._path.classList.add("pulse");
+      else m._path.classList.remove("pulse");
+      m.bindTooltip(
+        `<b>#${n.node_id}${n.name ? " " + n.name : ""}</b><br>` +
+        `${n.reasons.join("<br>")}<br>` +
+        `batt ${n.battery_mv ?? "?"} mV · rssi ${n.rssi?.toFixed?.(0) ?? "?"}<br>` +
+        `seen ${fmtAgo(n.last_seen)}`, { className: "", sticky: true });
+    }
+    const div = document.createElement("div");
+    div.className = "node";
+    div.innerHTML =
+      `<span class="st" style="color:${COLORS[n.color]}">#${n.node_id}` +
+      `${n.name ? " · " + n.name : ""}</span>` +
+      `<div class="meta">${n.reasons.join(" · ")} — seen ${fmtAgo(n.last_seen)}` +
+      `${n.battery_mv ? " · " + n.battery_mv + " mV" : ""}</div>`;
+    if (hasPos) div.onclick = () => map.setView([n.lat, n.lon], 17);
+    list.appendChild(div);
+  }
+  document.getElementById("cg").textContent = counts.green || 0;
+  document.getElementById("cy").textContent = counts.yellow || 0;
+  document.getElementById("cr").textContent = counts.red || 0;
+  if (!fitted && pts.length) {
+    map.fitBounds(pts, { padding: [40, 40] });
+    fitted = true;
+  }
+}
+
+function pushFeed(e) {
+  const feed = document.getElementById("feed");
+  const div = document.createElement("div");
+  div.className = "ev " + e.kind;
+  const t = new Date(e.at * 1000).toLocaleTimeString();
+  const d = e.data;
+  let msg;
+  if (e.kind === "alert")
+    msg = `⚠ node #${d.node_id} ${d.event?.toUpperCase()} conf=${d.confidence}`;
+  else if (e.kind === "heartbeat")
+    msg = `node #${d.node_id} heartbeat · ${d.battery_mv} mV`;
+  else
+    msg = `node #${d.node_id} → ${d.color}` +
+          (d.reasons?.length ? ` (${d.reasons[0]})` : "");
+  div.innerHTML = `<span class="t">${t}</span>${msg}`;
+  feed.prepend(div);
+  while (feed.children.length > 120) feed.lastChild.remove();
+  if (e.kind === "alert" && markers[d.node_id])
+    markers[d.node_id].setStyle({ radius: 14 }) &&
+      setTimeout(() => markers[d.node_id].setStyle({ radius: 9 }), 1500);
+}
+
+async function tick() {
+  try {
+    const [nodes, evts] = await Promise.all([
+      api("/gw/nodes"), api("/gw/events?since=" + lastEvt)]);
+    document.getElementById("offline").style.display = "none";
+    renderNodes(nodes.nodes);
+    for (const e of evts.events) { pushFeed(e); lastEvt = Math.max(lastEvt, e.at); }
+    if (!lastEvt) lastEvt = evts.now;
+  } catch {
+    document.getElementById("offline").style.display = "block";
+  }
+}
+tick();
+setInterval(tick, 3000);
+</script>
+</body>
+</html>

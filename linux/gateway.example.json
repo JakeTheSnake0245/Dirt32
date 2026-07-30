@@ -1,0 +1,22 @@
+{
+  "net_id": 1,
+  "serial_device": "/dev/ttyUSB0",
+  "radio": {
+    "freq_mhz": 903.0,
+    "sf": 10,
+    "bw_khz": 125.0,
+    "cr": 5,
+    "tx_power_dbm": 20
+  },
+  "db_path": "dirt32.sqlite3",
+  "keys_path": "keys.json",
+  "web": { "host": "0.0.0.0", "port": 8080 },
+  "mqtt": { "enabled": true, "host": "127.0.0.1", "port": 1883 },
+  "status": {
+    "yellow_silence_s": 43200,
+    "red_silence_s": 86400,
+    "low_battery_mv": 3300,
+    "move_threshold_m": 30.0
+  },
+  "simulator": false
+}

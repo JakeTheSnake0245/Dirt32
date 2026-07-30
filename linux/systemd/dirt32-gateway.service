@@ -1,0 +1,23 @@
+[Unit]
+Description=Dirt32 perimeter gateway (ingest + MQTT + web GUI)
+After=network.target mosquitto.service
+Wants=mosquitto.service
+
+[Service]
+Type=simple
+User=dirt32
+Group=dirt32
+ExecStart=/usr/bin/python3 -m dirt32_gateway.main /etc/dirt32/gateway.json
+WorkingDirectory=/var/lib/dirt32
+Environment=PYTHONPATH=/opt/dirt32/gatewayd
+Restart=always
+RestartSec=5
+# hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/dirt32
+ProtectHome=true
+SupplementaryGroups=dialout
+
+[Install]
+WantedBy=multi-user.target
