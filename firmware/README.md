@@ -20,7 +20,8 @@ firmware/
         │   ├── Adxl355FrontEnd   Option A — SPI accel, motion-wake
         │   └── GeophoneFrontEnd  Option B — SM-24 + ADS1220, continuous
         ├── detector/StaLta       STA/LTA trigger + band classifier
-        └── radio/LoRaLink        SX1262 TX + closed-loop ACK window
+        ├── radio/LoRaLink        SX1262 TX + closed-loop ACK window
+        └── display/DebugScreen   PRG-button OLED page: link params + key FP
 ```
 
 ## Run the protocol tests (host, no hardware)
@@ -60,6 +61,81 @@ pio run -t upload        # then: pio device monitor -b 115200
 4. `detector 30` streams the live STA/LTA ratio once a front-end is wired —
    tap the desk to tune `trigger_ratio` (spec §13 step 4).
 
+## Configuring a node (serial CLI)
+
+Cold-boot (USB power / reset button) drops the node into bench mode with a
+CLI on the serial port. Connect with `pio device monitor -b 115200`, then:
+
+```
+show                       # print full config as JSON (PSK redacted)
+set <param> <value>        # change one parameter
+save                       # persist to flash (survives power cycles)
+reboot                     # apply anything the radio reads at init
+```
+
+### Radio parameters — MUST match on every board in a network
+
+| Param      | Meaning                              | Default | Example            |
+|------------|--------------------------------------|---------|--------------------|
+| `f_in`     | TX frequency, MHz (node → uplink)    | 903.0   | `set f_in 903.0`   |
+| `sf`       | Spreading factor (7–12)              | 10      | `set sf 9`         |
+| `bw`       | Bandwidth, kHz                       | 125.0   | `set bw 125.0`     |
+| `cr`       | Coding rate 4/x (5–8)                | 5       | `set cr 5`         |
+| `net_id`   | Network ID (drives LoRa sync word)   | 1       | `set net_id 7`     |
+| `psk`      | 256-bit key, 64 hex chars            | zeros   | `set psk <hex>` or `keygen` |
+
+Also matching-relevant: `ack_enable` (the receiver must actually source ACKs
+for the sender's ACK window to close).
+
+Per-board (must NOT match): `node_id` — unique per node.
+`tx_power` (dBm, ≤22) affects range only, not compatibility.
+
+### Heartbeat periodicity
+
+```
+set heartbeat_per_day 4    # 4 = every 6 h; 24 = hourly; 96 = every 15 min
+save
+```
+
+The node sleeps between beats and wakes on a timer; each heartbeat is a
+single encrypted, single-shot frame (no retransmit burst). On the bench,
+`hb` sends one immediately without waiting for the timer.
+
+### Detection / front-end parameters
+
+`front_end` (`adxl355` | `geophone`), `sample_rate_hz`, `hpf_hz`, `sta_ms`,
+`lta_ms`, `trigger_ratio`, `footstep_lo`/`footstep_hi`, `vehicle_lo`/
+`vehicle_hi`, `motion_wake_enable`, `motion_threshold`. These only matter on
+the sending node — they never affect radio compatibility.
+
+### Reliability parameters (alerts)
+
+`ack_enable`, `ack_window_ms`, `retx_count`, `retx_jitter_min`,
+`retx_jitter_max`.
+
+## Debug screen (PRG button)
+
+Press the **PRG (USER) button** and the onboard OLED shows everything that
+must match for two boards to communicate:
+
+```
+NET 7   NODE 1
+FREQ 903.0 MHz
+SF9 BW125k CR4/5
+KEY 3F0A   ACK ON
+HB 4/day  TX 17dBm
+SEQ 129  RADIO OK
+```
+
+- **KEY** is a 4-hex-digit fingerprint of the PSK — the key itself is never
+  shown. Two boards displaying the same fingerprint hold the same key.
+- Hold both boards side by side: if lines 1–4 match (NET, FREQ, SF/BW/CR,
+  KEY), they can talk. NODE must differ; SEQ/RADIO are per-board status.
+- Press PRG again to hide it; it auto-blanks after 20 s. `screen` on the CLI
+  shows the same page.
+- The OLED is only ever powered in bench mode — it stays dark in deployed
+  (sleep/wake) operation.
+
 ### Verify before trusting (spec §12)
 
 - **Ve polarity (GPIO36):** default assumed active-HIGH. If your board is
@@ -72,8 +148,10 @@ pio run -t upload        # then: pio device monitor -b 115200
 
 - Per-node 256-bit PSK; ChaCha20-Poly1305 with the 8-byte header as AAD.
 - Nonce = `NODE_ID(2) ‖ MSG_TYPE(1) ‖ SEQ(3) ‖ 0*6` — unique because SEQ is
-  monotonic and **checkpointed to NVS every 64 frames**, fast-forwarded on
-  cold boot so a brownout can never cause nonce reuse.
+  monotonic and **reserved in NVS before use** (write-ahead, 64 at a time),
+  fast-forwarded to the NVS bound on *every* reset cause, and hard-stopped
+  before 24-bit wrap (rotate the PSK, then `seqreset`) — so no brownout,
+  watchdog, or counter wrap can ever cause nonce reuse.
 - Node authenticates ACKs under its own key and runs its own replay window,
   so a captured/replayed ACK cannot suppress retransmissions.
 - Spoofed `NODE_ID`/`SEQ` (header tamper) fails tag verification: header is

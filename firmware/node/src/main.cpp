@@ -21,6 +21,7 @@
 #include "frontend/GeophoneFrontEnd.h"
 #include "detector/StaLta.h"
 #include "radio/LoRaLink.h"
+#include "display/DebugScreen.h"
 #include <Preferences.h>
 
 /* ---------- Persistent (RTC / NVS) state ---------- */
@@ -33,6 +34,7 @@ static LoRaLink link_;
 static FrontEnd *frontEnd = nullptr;
 static StaLta detector;
 static bool radioOk = false, sensorOk = false, selfTestOk = false;
+static DebugScreen dbgScreen;
 
 /* ---------- SEQ management ----------
  * SEQ is the replay key and nonce base — it must NEVER repeat under the same
@@ -224,6 +226,7 @@ static void printHelp() {
         "  detector <seconds>   stream STA/LTA ratio for tuning\n"
         "  selftest             run front-end self test\n"
         "  seqreset             reset SEQ to 0 (ONLY after PSK rotation)\n"
+        "  screen               show link-debug page on the OLED (or press PRG)\n"
         "  sleep                enter deep sleep now\n"
         "  reboot");
 }
@@ -283,6 +286,7 @@ static void handleCli(String line) {
         Serial.println("SEQ reset. Only valid after a PSK rotation (keygen+save) "
                        "and re-registration at the gateway.");
     }
+    else if (cmd == "screen") dbgScreen.show(cfg, radioOk, rtc_seq);
     else if (cmd == "sleep") goToSleep();
     else if (cmd == "reboot") ESP.restart();
     else Serial.println("unknown command — try `help`");
@@ -343,7 +347,9 @@ void setup() {
     }
     /* Cold boot: stay awake for provisioning/bench work.
        Geophone profile also lives here: continuous listen in loop(). */
+    dbgScreen.begin(PIN_BUTTON);
     Serial.println("Bench mode — CLI active. `help` for commands.");
+    Serial.println("Press PRG button (or `screen`) for the link-debug display.");
     if (cfg.front_end == FE_GEOPHONE)
         Serial.println("Geophone profile: continuous detection running.");
 }
@@ -357,6 +363,9 @@ void loop() {
             lineBuf = "";
         } else lineBuf += c;
     }
+
+    /* PRG button → link-debug OLED page */
+    dbgScreen.poll(cfg, radioOk, rtc_seq);
 
     /* Geophone continuous-listen profile */
     if (cfg.front_end == FE_GEOPHONE && sensorOk) {
