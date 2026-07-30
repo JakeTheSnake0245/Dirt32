@@ -75,25 +75,36 @@ reboot                     # apply anything the radio reads at init
 
 ### Radio parameters — MUST match on every board in a network
 
-| Param      | Meaning                              | Default | Example            |
-|------------|--------------------------------------|---------|--------------------|
-| `f_in`     | TX frequency, MHz (node → uplink)    | 903.0   | `set f_in 903.0`   |
-| `sf`       | Spreading factor (7–12)              | 10      | `set sf 9`         |
-| `bw`       | Bandwidth, kHz                       | 125.0   | `set bw 125.0`     |
-| `cr`       | Coding rate 4/x (5–8)                | 5       | `set cr 5`         |
-| `net_id`   | Network ID (drives LoRa sync word)   | 1       | `set net_id 7`     |
-| `psk`      | 256-bit key, 64 hex chars            | zeros   | `set psk <hex>` or `keygen` |
+Defaults ARE the recommended settings for this deployment (buried perimeter
+nodes, US915, long battery life) — a freshly flashed board only needs
+`node_id`, `net_id`, and a key.
+
+| Param    | Meaning                            | Min  | Max   | Default = recommended | Why |
+|----------|------------------------------------|------|-------|-----------------------|-----|
+| `f_in`   | TX freq MHz (node → uplink)        | 902.3| 914.9 | **903.0**             | Clear of the US915 LoRaWAN uplink center channels |
+| `sf`     | Spreading factor                   | 7    | 12    | **10**                | Buried antenna + ~1 km field range; SF7 is bench-only, SF12 burns 4× the battery per frame |
+| `bw`     | Bandwidth kHz                      | 62.5 | 500   | **125.0**             | Best sensitivity/airtime balance at SF10 |
+| `cr`     | Coding rate 4/x                    | 5    | 8     | **5**                 | Higher CR only helps in heavy interference; costs airtime |
+| `net_id` | Network ID → LoRa sync word        | 1    | 255   | **1** (pick your own) | Isolates your perimeter from any neighboring deployment |
+| `psk`    | 256-bit key (64 hex)               | —    | —     | `keygen` per node     | Never reuse a key across nodes |
 
 Also matching-relevant: `ack_enable` (the receiver must actually source ACKs
 for the sender's ACK window to close).
 
 Per-board (must NOT match): `node_id` — unique per node.
-`tx_power` (dBm, ≤22) affects range only, not compatibility.
+
+| Param      | Min | Max | Default = recommended | Why |
+|------------|-----|-----|-----------------------|-----|
+| `tx_power` | 2   | 22  | **20** dBm            | Soil attenuation eats margin; 22 only if batteries allow — doesn't affect compatibility |
 
 ### Heartbeat periodicity
 
+| Param               | Min | Max | Default = recommended | Why |
+|---------------------|-----|-----|-----------------------|-----|
+| `heartbeat_per_day` | 1   | 96  | **24** (hourly)       | A security perimeter should notice a dead node within ~3 h (offline = 3 missed beats); 96 halves ADXL battery life for little gain, 4 leaves you blind most of a day |
+
 ```
-set heartbeat_per_day 4    # 4 = every 6 h; 24 = hourly; 96 = every 15 min
+set heartbeat_per_day 24   # 24 = hourly; 4 = every 6 h; 96 = every 15 min
 save
 ```
 
@@ -101,17 +112,35 @@ The node sleeps between beats and wakes on a timer; each heartbeat is a
 single encrypted, single-shot frame (no retransmit burst). On the bench,
 `hb` sends one immediately without waiting for the timer.
 
-### Detection / front-end parameters
+Heartbeats carry position, battery, tamper/motion-since-last-beat, noise
+floor, firmware version, and reset count. **Position note:** GPS is not
+wired yet (the V4 has no onboard GNSS) — heartbeats send the provisioned
+`fallback_lat_e7`/`fallback_lon_e7`, which is the intended steady state for
+buried nodes anyway (`set fallback_lat_e7 407128000` = 40.7128000°N).
 
-`front_end` (`adxl355` | `geophone`), `sample_rate_hz`, `hpf_hz`, `sta_ms`,
-`lta_ms`, `trigger_ratio`, `footstep_lo`/`footstep_hi`, `vehicle_lo`/
-`vehicle_hi`, `motion_wake_enable`, `motion_threshold`. These only matter on
-the sending node — they never affect radio compatibility.
+### Detection / front-end parameters (sender-only, never affect compatibility)
+
+| Param               | Min  | Max   | Default = recommended | Why |
+|---------------------|------|-------|-----------------------|-----|
+| `front_end`         | —    | —     | **adxl355**           | Motion-wake deep sleep = months of battery; use `geophone` only where you need max sensitivity and have the power budget |
+| `sample_rate_hz`    | 100  | 500   | **250**               | Covers the 80 Hz footstep band with margin; 500 doubles CPU-awake time |
+| `hpf_hz`            | 1    | 8     | **2.0**               | Kills wind/thermal drift without touching the 2–20 Hz vehicle band |
+| `sta_ms`            | 50   | 1000  | **200**               | Short enough to catch a single footstep impulse |
+| `lta_ms`            | 1000 | 30000 | **5000**              | Stable background estimate; longer adapts too slowly at dawn/dusk noise shifts |
+| `trigger_ratio`     | 2    | 10    | **4.0**               | Start here, then tune with `detector 30` on-site (spec §13): lower → sensitive, higher → fewer false alarms |
+| `footstep_lo`/`hi`  | —    | —     | **20 / 80** Hz        | Per spec §5.2 band split |
+| `vehicle_lo`/`hi`   | —    | —     | **2 / 20** Hz         | Per spec §5.2 band split |
+| `motion_threshold`  | 0.002| 0.1   | **0.005** g           | ADXL wake threshold; raise if wind/livestock cause spurious wakes |
 
 ### Reliability parameters (alerts)
 
-`ack_enable`, `ack_window_ms`, `retx_count`, `retx_jitter_min`,
-`retx_jitter_max`.
+| Param             | Min | Max  | Default = recommended | Why |
+|-------------------|-----|------|-----------------------|-----|
+| `ack_enable`      | 0   | 1    | **1**                 | Closed-loop delivery for a security system |
+| `ack_window_ms`   | 200 | 5000 | **1500**              | SF10/125 kHz ACK airtime is ~400 ms; 500 was too tight, 5000 wastes RX battery |
+| `retx_count`      | 1   | 8    | **3**                 | 3 tries at jittered intervals beats one packet through a collision |
+| `retx_jitter_min` | 50  | —    | **200** ms            | Randomized backoff so two triggered nodes don't collide repeatedly |
+| `retx_jitter_max` | —   | 5000 | **800** ms            | Keeps worst-case alert latency ~4 s at retx 3 |
 
 ## Debug screen (PRG button)
 
@@ -123,7 +152,7 @@ NET 7   NODE 1
 FREQ 903.0 MHz
 SF9 BW125k CR4/5
 KEY 3F0A   ACK ON
-HB 4/day  TX 17dBm
+HB 24/day  TX 20dBm
 SEQ 129  RADIO OK
 ```
 

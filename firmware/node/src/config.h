@@ -21,10 +21,10 @@ struct NodeConfig {
     uint8_t  sf              = 10;     /* SF7..SF12 */
     float    bw_khz          = 125.0f;
     uint8_t  cr              = 5;      /* 4/5 */
-    int8_t   tx_power_dbm    = 17;     /* max 22 */
+    int8_t   tx_power_dbm    = 20;     /* max 22; buried nodes need margin */
 
     /* Schedule */
-    uint8_t  heartbeat_per_day = 4;
+    uint8_t  heartbeat_per_day = 24;   /* hourly liveness for a security perimeter */
 
     /* Detection (spec §5.2) */
     uint16_t sample_rate_hz  = 250;    /* 250-500 */
@@ -40,7 +40,7 @@ struct NodeConfig {
     uint16_t retx_jitter_min_ms = 200;
     uint16_t retx_jitter_max_ms = 800;
     bool     ack_enable      = true;   /* v2 closed-loop */
-    uint16_t ack_window_ms   = 500;
+    uint16_t ack_window_ms   = 1500;   /* SF10/125k ACK airtime ≈ 400 ms + turnaround */
 
     /* Front-end */
     FrontEndType front_end   = FE_ADXL355;
