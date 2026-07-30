@@ -226,7 +226,10 @@ void DebugScreen::render(const NodeConfig &cfg, bool radioOk, uint32_t seq) {
              radioOk ? "OK" : "FAIL");
     fbText(0, 7, line);
 
+    int lit = 0;
+    for (size_t i = 0; i < sizeof(fb); i++) if (fb[i]) lit++;
     if (!oledFlush()) Serial.println("[oled] render flush failed");
+    else Serial.printf("[oled] page flushed (%d non-zero bytes in buffer)\n", lit);
 }
 
 void DebugScreen::poll(const NodeConfig &cfg, bool radioOk, uint32_t seq) {
