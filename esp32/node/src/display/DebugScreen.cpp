@@ -48,14 +48,31 @@ void DebugScreen::show(const NodeConfig &cfg, bool radioOk, uint32_t seq) {
     oledPower(true);
     delay(50);                     /* let the panel's charge pump settle */
     if (!oledInit) {
-        /* Probe the panel at the two common SSD1306 addresses. */
+        /* Diagnostic sweep: an SSD1306 held in reset does NOT ACK, so
+           release RST first, and try both Vext polarities. */
         Wire.begin(OLED_SDA, OLED_SCL);
-        for (uint8_t a : {0x3C, 0x3D}) {
-            Wire.beginTransmission(a);
-            uint8_t err = Wire.endTransmission();
-            Serial.printf("[oled] i2c probe 0x%02X -> %s\n", a,
-                          err == 0 ? "ACK" : "no response");
+        pinMode(OLED_RST, OUTPUT);
+        bool found = false;
+        for (int pol = 0; pol < 2 && !found; pol++) {
+            int lvl = pol == 0 ? LOW : HIGH;   /* LOW = expected (active-low) */
+            pinMode(PIN_VE, OUTPUT);
+            digitalWrite(PIN_VE, lvl);
+            delay(100);
+            /* proper reset pulse, then release high */
+            digitalWrite(OLED_RST, LOW);  delay(10);
+            digitalWrite(OLED_RST, HIGH); delay(50);
+            for (uint8_t a : {0x3C, 0x3D}) {
+                Wire.beginTransmission(a);
+                uint8_t err = Wire.endTransmission();
+                Serial.printf("[oled] Vext=%s, RST released: probe 0x%02X -> %s\n",
+                              lvl == LOW ? "LOW" : "HIGH", a,
+                              err == 0 ? "ACK" : "no response");
+                if (err == 0) found = true;
+            }
         }
+        if (!found)
+            Serial.println("[oled] no panel found on SDA=17 SCL=18 — "
+                           "pins may differ on this board revision");
         u8g2.begin();
         oledInit = true;
         Serial.println("[oled] u8g2 init done");
