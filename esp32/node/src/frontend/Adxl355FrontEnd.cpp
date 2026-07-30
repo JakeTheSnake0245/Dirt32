@@ -1,3 +1,4 @@
+#include <Arduino.h>
 #include "Adxl355FrontEnd.h"
 
 /* ADXL355 register map (subset) */

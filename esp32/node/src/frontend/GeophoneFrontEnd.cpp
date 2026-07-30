@@ -1,3 +1,4 @@
+#include <Arduino.h>
 #include "GeophoneFrontEnd.h"
 
 /* ADS1220 commands */

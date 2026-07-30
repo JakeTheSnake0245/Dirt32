@@ -1,0 +1,258 @@
+ *  Executing task: platformio run --environment heltec_v4 
+
+Processing heltec_v4 (platform: espressif32; board: heltec_wifi_lora_32_V3; framework: arduino)
+-----------------------------------------------------------------------------------------------------------------------------------------------------
+Verbose mode can be enabled via `-v, --verbose` option
+CONFIGURATION: https://docs.platformio.org/page/boards/espressif32/heltec_wifi_lora_32_V3.html
+PLATFORM: Espressif 32 (7.0.1) > Heltec WiFi LoRa 32 (V3)
+HARDWARE: ESP32S3 240MHz, 320KB RAM, 8MB Flash
+DEBUG: Current (cmsis-dap) External (cmsis-dap, esp-bridge, esp-builtin, esp-prog, iot-bus-jtag, jlink, minimodule, olimex-arm-usb-ocd, olimex-arm-usb-ocd-h, olimex-arm-usb-tiny-h, olimex-jtag-tiny, tumpa)
+PACKAGES: 
+ - framework-arduinoespressif32 @ 3.20017.241212+sha.dcc1105b 
+ - tool-esptoolpy @ 2.41100.0 (4.11.0) 
+ - toolchain-riscv32-esp @ 8.4.0+2021r2-patch5 
+ - toolchain-xtensa-esp32s3 @ 8.4.0+2021r2-patch5
+LDF: Library Dependency Finder -> https://bit.ly/configure-pio-ldf
+LDF Modes: Finder ~ chain, Compatibility ~ soft
+Found 37 compatible libraries
+Scanning dependencies...
+Dependency Graph
+|-- RadioLib @ 6.6.0
+|-- ArduinoJson @ 7.4.3
+|-- U8g2 @ 2.36.18
+|-- Preferences @ 2.0.0
+|-- sps_proto
+|-- Wire @ 2.0.0
+|-- SPI @ 2.0.0
+Building in release mode
+Compiling .pio/build/heltec_v4/src/config.cpp.o
+Compiling .pio/build/heltec_v4/src/detector/StaLta.cpp.o
+Compiling .pio/build/heltec_v4/src/display/DebugScreen.cpp.o
+Compiling .pio/build/heltec_v4/src/frontend/Adxl355FrontEnd.cpp.o
+Compiling .pio/build/heltec_v4/src/frontend/GeophoneFrontEnd.cpp.o
+Compiling .pio/build/heltec_v4/src/gps/GpsUart.cpp.o
+Compiling .pio/build/heltec_v4/src/main.cpp.o
+Compiling .pio/build/heltec_v4/src/radio/LoRaLink.cpp.o
+Building .pio/build/heltec_v4/bootloader.bin
+Generating partitions .pio/build/heltec_v4/partitions.bin
+Compiling .pio/build/heltec_v4/lib460/SPI/SPI.cpp.o
+esptool.py v4.11.0
+Creating esp32s3 image...
+Merged 1 ELF section
+Successfully created esp32s3 image.
+Compiling .pio/build/heltec_v4/lib787/RadioLib/ArduinoHal.cpp.o
+Compiling .pio/build/heltec_v4/lib787/RadioLib/Hal.cpp.o
+Compiling .pio/build/heltec_v4/lib787/RadioLib/Module.cpp.o
+Compiling .pio/build/heltec_v4/lib787/RadioLib/modules/CC1101/CC1101.cpp.o
+Compiling .pio/build/heltec_v4/lib787/RadioLib/modules/LLCC68/LLCC68.cpp.o
+Compiling .pio/build/heltec_v4/lib787/RadioLib/modules/LR11x0/LR1110.cpp.o
+Compiling .pio/build/heltec_v4/lib787/RadioLib/modules/LR11x0/LR1120.cpp.o
+Compiling .pio/build/heltec_v4/lib787/RadioLib/modules/LR11x0/LR1121.cpp.o
+Compiling .pio/build/heltec_v4/lib787/RadioLib/modules/LR11x0/LR11x0.cpp.o
+src/frontend/GeophoneFrontEnd.cpp: In member function 'void GeophoneFrontEnd::cmd(uint8_t)':
+src/frontend/GeophoneFrontEnd.cpp:13:47: error: 'MSBFIRST' was not declared in this scope
+     _spi.beginTransaction(SPISettings(SPI_HZ, MSBFIRST, SPI_MODE1));
+                                               ^~~~~~~~
+src/frontend/Adxl355FrontEnd.cpp: In member function 'uint8_t Adxl355FrontEnd::reg(uint8_t)':
+src/frontend/Adxl355FrontEnd.cpp:21:47: error: 'MSBFIRST' was not declared in this scope
+     _spi.beginTransaction(SPISettings(SPI_HZ, MSBFIRST, SPI_MODE0));
+                                               ^~~~~~~~
+src/frontend/Adxl355FrontEnd.cpp:21:47: note: suggested alternative: 'SPI_MSBFIRST'
+     _spi.beginTransaction(SPISettings(SPI_HZ, MSBFIRST, SPI_MODE0));
+                                               ^~~~~~~~
+                                               SPI_MSBFIRST
+src/frontend/Adxl355FrontEnd.cpp:22:23: error: 'LOW' was not declared in this scope
+     digitalWrite(_cs, LOW);
+                       ^~~
+src/frontend/GeophoneFrontEnd.cpp:13:47: note: suggested alternative: 'SPI_MSBFIRST'
+     _spi.beginTransaction(SPISettings(SPI_HZ, MSBFIRST, SPI_MODE1));
+                                               ^~~~~~~~
+                                               SPI_MSBFIRST
+src/frontend/GeophoneFrontEnd.cpp:14:23: error: 'LOW' was not declared in this scope
+     digitalWrite(_cs, LOW);
+                       ^~~
+src/frontend/Adxl355FrontEnd.cpp:22:5: error: 'digitalWrite' was not declared in this scope
+     digitalWrite(_cs, LOW);
+     ^~~~~~~~~~~~
+src/frontend/GeophoneFrontEnd.cpp:14:5: error: 'digitalWrite' was not declared in this scope
+     digitalWrite(_cs, LOW);
+     ^~~~~~~~~~~~
+src/frontend/Adxl355FrontEnd.cpp:22:5: note: suggested alternative: 'regWrite'
+     digitalWrite(_cs, LOW);
+     ^~~~~~~~~~~~
+     regWrite
+src/frontend/Adxl355FrontEnd.cpp:25:23: error: 'HIGH' was not declared in this scope
+     digitalWrite(_cs, HIGH);
+                       ^~~~
+src/frontend/GeophoneFrontEnd.cpp:14:5: note: suggested alternative: 'spiWrite'
+     digitalWrite(_cs, LOW);
+     ^~~~~~~~~~~~
+     spiWrite
+src/frontend/GeophoneFrontEnd.cpp:16:23: error: 'HIGH' was not declared in this scope
+     digitalWrite(_cs, HIGH);
+                       ^~~~
+src/frontend/Adxl355FrontEnd.cpp: In member function 'void Adxl355FrontEnd::regWrite(uint8_t, uint8_t)':
+src/frontend/Adxl355FrontEnd.cpp:31:47: error: 'MSBFIRST' was not declared in this scope
+     _spi.beginTransaction(SPISettings(SPI_HZ, MSBFIRST, SPI_MODE0));
+                                               ^~~~~~~~
+src/frontend/GeophoneFrontEnd.cpp: In member function 'void GeophoneFrontEnd::writeRegs(const uint8_t*)':
+src/frontend/GeophoneFrontEnd.cpp:21:47: error: 'MSBFIRST' was not declared in this scope
+     _spi.beginTransaction(SPISettings(SPI_HZ, MSBFIRST, SPI_MODE1));
+                                               ^~~~~~~~
+src/frontend/Adxl355FrontEnd.cpp:31:47: note: suggested alternative: 'SPI_MSBFIRST'
+     _spi.beginTransaction(SPISettings(SPI_HZ, MSBFIRST, SPI_MODE0));
+                                               ^~~~~~~~
+                                               SPI_MSBFIRST
+src/frontend/Adxl355FrontEnd.cpp:32:23: error: 'LOW' was not declared in this scope
+     digitalWrite(_cs, LOW);
+                       ^~~
+src/frontend/Adxl355FrontEnd.cpp:32:5: error: 'digitalWrite' was not declared in this scope
+     digitalWrite(_cs, LOW);
+     ^~~~~~~~~~~~
+src/frontend/GeophoneFrontEnd.cpp:21:47: note: suggested alternative: 'SPI_MSBFIRST'
+     _spi.beginTransaction(SPISettings(SPI_HZ, MSBFIRST, SPI_MODE1));
+                                               ^~~~~~~~
+                                               SPI_MSBFIRST
+src/frontend/GeophoneFrontEnd.cpp:22:23: error: 'LOW' was not declared in this scope
+     digitalWrite(_cs, LOW);
+                       ^~~
+src/frontend/GeophoneFrontEnd.cpp:22:5: error: 'digitalWrite' was not declared in this scope
+     digitalWrite(_cs, LOW);
+     ^~~~~~~~~~~~
+src/frontend/Adxl355FrontEnd.cpp:32:5: note: suggested alternative: 'regWrite'
+     digitalWrite(_cs, LOW);
+     ^~~~~~~~~~~~
+     regWrite
+src/frontend/Adxl355FrontEnd.cpp:35:23: error: 'HIGH' was not declared in this scope
+     digitalWrite(_cs, HIGH);
+                       ^~~~
+src/frontend/Adxl355FrontEnd.cpp: In member function 'void Adxl355FrontEnd::burstRead(uint8_t, uint8_t*, size_t)':
+src/frontend/Adxl355FrontEnd.cpp:40:47: error: 'MSBFIRST' was not declared in this scope
+     _spi.beginTransaction(SPISettings(SPI_HZ, MSBFIRST, SPI_MODE0));
+                                               ^~~~~~~~
+src/frontend/GeophoneFrontEnd.cpp:22:5: note: suggested alternative: 'spiWrite'
+     digitalWrite(_cs, LOW);
+     ^~~~~~~~~~~~
+     spiWrite
+src/frontend/GeophoneFrontEnd.cpp:25:23: error: 'HIGH' was not declared in this scope
+     digitalWrite(_cs, HIGH);
+                       ^~~~
+src/frontend/Adxl355FrontEnd.cpp:40:47: note: suggested alternative: 'SPI_MSBFIRST'
+     _spi.beginTransaction(SPISettings(SPI_HZ, MSBFIRST, SPI_MODE0));
+                                               ^~~~~~~~
+                                               SPI_MSBFIRST
+src/frontend/Adxl355FrontEnd.cpp:41:23: error: 'LOW' was not declared in this scope
+     digitalWrite(_cs, LOW);
+                       ^~~
+src/frontend/GeophoneFrontEnd.cpp: In member function 'virtual bool GeophoneFrontEnd::begin(uint16_t)':
+src/frontend/GeophoneFrontEnd.cpp:30:18: error: 'OUTPUT' was not declared in this scope
+     pinMode(_cs, OUTPUT);
+                  ^~~~~~
+src/frontend/Adxl355FrontEnd.cpp:41:5: error: 'digitalWrite' was not declared in this scope
+     digitalWrite(_cs, LOW);
+     ^~~~~~~~~~~~
+src/frontend/GeophoneFrontEnd.cpp:30:5: error: 'pinMode' was not declared in this scope
+     pinMode(_cs, OUTPUT);
+     ^~~~~~~
+src/frontend/GeophoneFrontEnd.cpp:31:23: error: 'HIGH' was not declared in this scope
+     digitalWrite(_cs, HIGH);
+                       ^~~~
+src/frontend/GeophoneFrontEnd.cpp:31:5: error: 'digitalWrite' was not declared in this scope
+     digitalWrite(_cs, HIGH);
+     ^~~~~~~~~~~~
+src/frontend/Adxl355FrontEnd.cpp:41:5: note: suggested alternative: 'regWrite'
+     digitalWrite(_cs, LOW);
+     ^~~~~~~~~~~~
+     regWrite
+src/frontend/Adxl355FrontEnd.cpp:44:23: error: 'HIGH' was not declared in this scope
+     digitalWrite(_cs, HIGH);
+                       ^~~~
+src/frontend/Adxl355FrontEnd.cpp: In member function 'virtual bool Adxl355FrontEnd::begin(uint16_t)':
+src/frontend/Adxl355FrontEnd.cpp:49:18: error: 'OUTPUT' was not declared in this scope
+     pinMode(_cs, OUTPUT);
+                  ^~~~~~
+src/frontend/GeophoneFrontEnd.cpp:31:5: note: suggested alternative: 'spiWrite'
+     digitalWrite(_cs, HIGH);
+     ^~~~~~~~~~~~
+     spiWrite
+src/frontend/GeophoneFrontEnd.cpp:32:20: error: 'INPUT' was not declared in this scope
+     pinMode(_drdy, INPUT);
+                    ^~~~~
+src/frontend/Adxl355FrontEnd.cpp:49:5: error: 'pinMode' was not declared in this scope
+     pinMode(_cs, OUTPUT);
+     ^~~~~~~
+src/frontend/GeophoneFrontEnd.cpp:32:20: note: suggested alternative: 'ICOUNT'
+     pinMode(_drdy, INPUT);
+                    ^~~~~
+                    ICOUNT
+src/frontend/GeophoneFrontEnd.cpp:33:5: error: 'delay' was not declared in this scope
+     delay(5);
+     ^~~~~
+src/frontend/Adxl355FrontEnd.cpp:50:23: error: 'HIGH' was not declared in this scope
+     digitalWrite(_cs, HIGH);
+                       ^~~~
+src/frontend/GeophoneFrontEnd.cpp:53:19: error: 'millis' was not declared in this scope
+     uint32_t t0 = millis();
+                   ^~~~~~
+src/frontend/Adxl355FrontEnd.cpp:50:5: error: 'digitalWrite' was not declared in this scope
+     digitalWrite(_cs, HIGH);
+     ^~~~~~~~~~~~
+src/frontend/GeophoneFrontEnd.cpp:53:19: note: suggested alternative: 'malloc'
+     uint32_t t0 = millis();
+                   ^~~~~~
+                   malloc
+src/frontend/GeophoneFrontEnd.cpp:54:12: error: 'digitalRead' was not declared in this scope
+     while (digitalRead(_drdy) == HIGH) {
+            ^~~~~~~~~~~
+src/frontend/Adxl355FrontEnd.cpp:50:5: note: suggested alternative: 'regWrite'
+     digitalWrite(_cs, HIGH);
+     ^~~~~~~~~~~~
+     regWrite
+src/frontend/Adxl355FrontEnd.cpp:51:20: error: 'INPUT' was not declared in this scope
+     pinMode(_int1, INPUT);
+                    ^~~~~
+src/frontend/GeophoneFrontEnd.cpp: In member function 'virtual size_t GeophoneFrontEnd::read(int16_t*, size_t)':
+src/frontend/GeophoneFrontEnd.cpp:62:25: error: 'digitalRead' was not declared in this scope
+     while (got < max && digitalRead(_drdy) == LOW) {
+                         ^~~~~~~~~~~
+src/frontend/Adxl355FrontEnd.cpp:51:20: note: suggested alternative: 'ICOUNT'
+     pinMode(_int1, INPUT);
+                    ^~~~~
+                    ICOUNT
+src/frontend/Adxl355FrontEnd.cpp:52:5: error: 'delay' was not declared in this scope
+     delay(10); /* Ve rail settle */
+     ^~~~~
+src/frontend/Adxl355FrontEnd.cpp: In member function 'virtual bool Adxl355FrontEnd::selfTest()':
+src/frontend/Adxl355FrontEnd.cpp:105:5: error: 'delay' was not declared in this scope
+     delay(50); (void)read(buf, 8);
+     ^~~~~
+src/frontend/GeophoneFrontEnd.cpp:62:47: error: 'LOW' was not declared in this scope
+     while (got < max && digitalRead(_drdy) == LOW) {
+                                               ^~~
+src/frontend/GeophoneFrontEnd.cpp:63:51: error: 'MSBFIRST' was not declared in this scope
+         _spi.beginTransaction(SPISettings(SPI_HZ, MSBFIRST, SPI_MODE1));
+                                                   ^~~~~~~~
+src/frontend/GeophoneFrontEnd.cpp:63:51: note: suggested alternative: 'SPI_MSBFIRST'
+         _spi.beginTransaction(SPISettings(SPI_HZ, MSBFIRST, SPI_MODE1));
+                                                   ^~~~~~~~
+                                                   SPI_MSBFIRST
+src/frontend/GeophoneFrontEnd.cpp:64:9: error: 'digitalWrite' was not declared in this scope
+         digitalWrite(_cs, LOW);
+         ^~~~~~~~~~~~
+src/frontend/GeophoneFrontEnd.cpp:64:9: note: suggested alternative: 'spiWrite'
+         digitalWrite(_cs, LOW);
+         ^~~~~~~~~~~~
+         spiWrite
+src/frontend/GeophoneFrontEnd.cpp:69:27: error: 'HIGH' was not declared in this scope
+         digitalWrite(_cs, HIGH);
+                           ^~~~
+src/frontend/GeophoneFrontEnd.cpp: In member function 'virtual bool GeophoneFrontEnd::selfTest()':
+src/frontend/GeophoneFrontEnd.cpp:81:5: error: 'delay' was not declared in this scope
+     delay(60);
+     ^~~~~
+*** [.pio/build/heltec_v4/src/frontend/GeophoneFrontEnd.cpp.o] Error 1
+*** [.pio/build/heltec_v4/src/frontend/Adxl355FrontEnd.cpp.o] Error 1
+============================================================ [FAILED] Took 3.44 seconds ============================================================
+
+ *  The terminal process "platformio 'run', '--environment', 'heltec_v4'" terminated with exit code: 1. 
+ *  Terminal will be reused by tasks, press any key to close it. 
