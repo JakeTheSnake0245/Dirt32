@@ -1,0 +1,46 @@
+krakenrf@krakensdr:~/Dirt32 $ 
+krakenrf@krakensdr:~/Dirt32 $ sudo systemctl stop dirt32-gateway
+stty -F /dev/ttyACM1 115200 raw -echo
+cat /dev/ttyACM1 &
+echo "PING" > /dev/ttyACM1
+[1] 76751
+OK PING
+krakenrf@krakensdr:~/Dirt32 $ echo "CFG 903.0 10 125 5 1 10" > /dev/ttyACM1
+krakenrf@krakensdr:~/Dirt32 $ OK CFG
+RDY
+^C
+krakenrf@krakensdr:~/Dirt32 $ kill %1
+sudo systemctl start dirt32-gateway
+[1]+  Terminated              cat /dev/ttyACM1
+krakenrf@krakensdr:~/Dirt32 $ sudo journalctl -u dirt32-gateway -n 30 --no-pager
+Jul 30 21:30:50 krakensdr python3[73294]:   File "<frozen runpy>", line 88, in _run_code
+Jul 30 21:30:50 krakensdr python3[73294]:   File "/opt/dirt32/gatewayd/dirt32_gateway/main.py", line 113, in <module>
+Jul 30 21:30:50 krakensdr python3[73294]:     main()
+Jul 30 21:30:50 krakensdr python3[73294]:   File "/opt/dirt32/gatewayd/dirt32_gateway/main.py", line 98, in main
+Jul 30 21:30:50 krakensdr python3[73294]:     httpd = serve(db, feed, cfg["status"],
+Jul 30 21:30:50 krakensdr python3[73294]:             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Jul 30 21:30:50 krakensdr python3[73294]:   File "/opt/dirt32/gatewayd/dirt32_gateway/web.py", line 112, in serve
+Jul 30 21:30:50 krakensdr python3[73294]:     httpd = ThreadingHTTPServer((host, port), make_handler(db, feed, status_cfg))
+Jul 30 21:30:50 krakensdr python3[73294]:             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Jul 30 21:30:50 krakensdr python3[73294]:   File "/usr/lib/python3.11/socketserver.py", line 456, in __init__
+Jul 30 21:30:50 krakensdr python3[73294]:     self.server_bind()
+Jul 30 21:30:50 krakensdr python3[73294]:   File "/usr/lib/python3.11/http/server.py", line 136, in server_bind
+Jul 30 21:30:50 krakensdr python3[73294]:     socketserver.TCPServer.server_bind(self)
+Jul 30 21:30:50 krakensdr python3[73294]:   File "/usr/lib/python3.11/socketserver.py", line 472, in server_bind
+Jul 30 21:30:50 krakensdr python3[73294]:     self.socket.bind(self.server_address)
+Jul 30 21:30:50 krakensdr python3[73294]: OSError: [Errno 98] Address already in use
+Jul 30 21:30:50 krakensdr python3[73294]: [cfg] loaded /etc/dirt32/gateway.json
+Jul 30 21:30:50 krakensdr python3[73294]: [cfg] 1 node key(s) loaded
+Jul 30 21:30:50 krakensdr systemd[1]: dirt32-gateway.service: Main process exited, code=exited, status=1/FAILURE
+Jul 30 21:30:50 krakensdr systemd[1]: dirt32-gateway.service: Failed with result 'exit-code'.
+Jul 30 21:30:50 krakensdr systemd[1]: Stopped dirt32-gateway.service - Dirt32 perimeter gateway (ingest + MQTT + web GUI).
+Jul 30 21:30:50 krakensdr systemd[1]: Started dirt32-gateway.service - Dirt32 perimeter gateway (ingest + MQTT + web GUI).
+Jul 30 21:31:09 krakensdr systemd[1]: Stopping dirt32-gateway.service - Dirt32 perimeter gateway (ingest + MQTT + web GUI)...
+Jul 30 21:31:09 krakensdr systemd[1]: dirt32-gateway.service: Deactivated successfully.
+Jul 30 21:31:09 krakensdr systemd[1]: Stopped dirt32-gateway.service - Dirt32 perimeter gateway (ingest + MQTT + web GUI).
+Jul 30 21:31:09 krakensdr systemd[1]: Started dirt32-gateway.service - Dirt32 perimeter gateway (ingest + MQTT + web GUI).
+Jul 30 21:34:07 krakensdr systemd[1]: Stopping dirt32-gateway.service - Dirt32 perimeter gateway (ingest + MQTT + web GUI)...
+Jul 30 21:34:07 krakensdr systemd[1]: dirt32-gateway.service: Deactivated successfully.
+Jul 30 21:34:07 krakensdr systemd[1]: Stopped dirt32-gateway.service - Dirt32 perimeter gateway (ingest + MQTT + web GUI).
+Jul 30 21:34:39 krakensdr systemd[1]: Started dirt32-gateway.service - Dirt32 perimeter gateway (ingest + MQTT + web GUI).
+krakenrf@krakensdr:~/Dirt32 $ 
