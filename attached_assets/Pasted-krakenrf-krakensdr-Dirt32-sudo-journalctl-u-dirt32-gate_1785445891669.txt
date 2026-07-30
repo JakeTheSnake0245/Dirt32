@@ -1,0 +1,29 @@
+krakenrf@krakensdr:~/Dirt32 $ sudo journalctl -u dirt32-gateway -f
+Jul 30 21:52:06 krakensdr systemd[1]: Stopping dirt32-gateway.service - Dirt32 perimeter gateway (ingest + MQTT + web GUI)...
+Jul 30 21:52:06 krakensdr systemd[1]: dirt32-gateway.service: Deactivated successfully.
+Jul 30 21:52:06 krakensdr systemd[1]: Stopped dirt32-gateway.service - Dirt32 perimeter gateway (ingest + MQTT + web GUI).
+Jul 30 21:52:06 krakensdr systemd[1]: dirt32-gateway.service: Consumed 7.275s CPU time.
+Jul 30 21:52:06 krakensdr systemd[1]: Started dirt32-gateway.service - Dirt32 perimeter gateway (ingest + MQTT + web GUI).
+Jul 30 21:56:00 krakensdr systemd[1]: Stopping dirt32-gateway.service - Dirt32 perimeter gateway (ingest + MQTT + web GUI)...
+Jul 30 21:56:00 krakensdr systemd[1]: dirt32-gateway.service: Deactivated successfully.
+Jul 30 21:56:00 krakensdr systemd[1]: Stopped dirt32-gateway.service - Dirt32 perimeter gateway (ingest + MQTT + web GUI).
+Jul 30 21:56:00 krakensdr systemd[1]: dirt32-gateway.service: Consumed 11.221s CPU time.
+Jul 30 21:56:00 krakensdr systemd[1]: Started dirt32-gateway.service - Dirt32 perimeter gateway (ingest + MQTT + web GUI).
+^C
+krakenrf@krakensdr:~/Dirt32 $ ls -l /dev/serial/by-id/
+total 0
+lrwxrwxrwx 1 root root 13 Jul 30 20:56 usb-Espressif_USB_JTAG_serial_debug_unit_8C:FD:49:B5:A4:90-if00 -> ../../ttyACM1
+lrwxrwxrwx 1 root root 13 Jul 30 17:11 usb-u-blox_AG_-_www.u-blox.com_u-blox_7_-_GPS_GNSS_Receiver-if00 -> ../../ttyACM0
+krakenrf@krakensdr:~/Dirt32 $ sudo systemctl status dirt32-gateway --no-pager
+● dirt32-gateway.service - Dirt32 perimeter gateway (ingest + MQTT + web GUI)
+     Loaded: loaded (/etc/systemd/system/dirt32-gateway.service; enabled; preset: enabled)
+     Active: active (running) since Thu 2026-07-30 21:56:00 BST; 15min ago
+   Main PID: 80343 (python3)
+      Tasks: 3 (limit: 9573)
+        CPU: 49.434s
+     CGroup: /system.slice/dirt32-gateway.service
+             └─80343 /usr/bin/python3 -m dirt32_gateway.main /etc/dirt32/gateway.json
+
+Jul 30 21:56:00 krakensdr systemd[1]: Started dirt32-gateway.service - Dirt32 perimeter gateway (ingest + MQTT …eb GUI).
+Hint: Some lines were ellipsized, use -l to show in full.
+krakenrf@krakensdr:~/Dirt32 $ 
