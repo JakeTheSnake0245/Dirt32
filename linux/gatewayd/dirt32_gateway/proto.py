@@ -31,10 +31,11 @@ PAYLOAD_LEN = {MSG_ALERT: ALERT_PLEN, MSG_HEARTBEAT: HEARTBEAT_PLEN, MSG_ACK: AC
 EV_NAMES = {0: "unknown", 1: "footstep", 2: "vehicle", 3: "multiple"}
 
 HF_SENSOR_OK = 1 << 0
-HF_GPS_FIX = 1 << 1
-HF_SELFTEST = 1 << 2
-HF_TAMPER = 1 << 3
-HF_ON_SOLAR = 1 << 4
+HF_GPS_FIX   = 1 << 1
+HF_SELFTEST  = 1 << 2
+HF_TAMPER    = 1 << 3
+HF_ON_SOLAR  = 1 << 4
+HF_DEPLOY    = 1 << 5   # node just placed in field (button-triggered heartbeat)
 
 ACK_OK = 0
 ACK_DUP = 1

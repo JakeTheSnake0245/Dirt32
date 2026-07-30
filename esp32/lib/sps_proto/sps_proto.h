@@ -64,6 +64,7 @@ extern "C" {
 #define SPS_HF_SELFTEST    (1u << 2)
 #define SPS_HF_TAMPER      (1u << 3)
 #define SPS_HF_ON_SOLAR    (1u << 4)
+#define SPS_HF_DEPLOY      (1u << 5)   /* node just placed in field (button-triggered) */
 
 /* ACK status */
 #define SPS_ACK_OK         0u

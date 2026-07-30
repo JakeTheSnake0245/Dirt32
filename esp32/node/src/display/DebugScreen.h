@@ -1,46 +1,64 @@
 /*
- * DebugScreen — bench/debug OLED page for the Heltec V4 onboard SSD1306.
+ * DebugScreen — OLED status/config page for the Heltec V4.
  *
- * Purpose: field-check that two boards can talk. Pressing the PRG (USER)
- * button shows every parameter that must MATCH between boards for the radio
- * link to work, plus a 4-hex-digit key fingerprint so you can confirm both
- * boards hold the same PSK without ever displaying the key itself.
+ * Button tiers (PRG / USER button, GPIO0, active-low):
+ *   TAP    (< 800 ms)    → caller sends deploy heartbeat + shows deploy page
+ *   HOLD   (800 ms–8 s)  → released: caller shows config page
+ *   SLEEP  (≥ 8 s)       → fires immediately (no release needed): caller sleeps
  *
- * The screen auto-blanks after DISPLAY_TIMEOUT_MS to save power; the OLED is
- * never initialized until the first button press (it is unpowered in normal
- * operation and irrelevant to buried deployment).
+ * Screen auto-blanks after DISPLAY_TIMEOUT_MS. Always-off until first event.
  */
 #pragma once
 #include <Arduino.h>
 #include "../config.h"
 
+enum class BtnEvent : uint8_t { NONE, TAP, HOLD, SLEEP };
+
 class DebugScreen {
 public:
-    /* buttonPin: PRG/USER button, active-low with internal pullup. */
     void begin(uint8_t buttonPin);
 
-    /* Call from loop(). Handles debounce, shows the page on press,
-       refreshes while visible, blanks after timeout. */
-    void poll(const NodeConfig &cfg, bool radioOk, uint32_t seq);
+    /* Call every loop(). Returns the event if one fired this tick. */
+    BtnEvent poll();
 
-    /* Force the page on (used by the `screen` CLI command). */
-    void show(const NodeConfig &cfg, bool radioOk, uint32_t seq);
+    /* Show the link-config page (radio params, key fingerprint, SEQ). */
+    void showConfig(const NodeConfig &cfg, bool radioOk, uint32_t seq);
+
+    /* Show a full-screen status message (e.g. "DEPLOYING...", "SLEEPING"). */
+    void showMessage(const char *line1, const char *line2 = nullptr,
+                     const char *line3 = nullptr);
+
+    /* Blank the display. */
+    void off();
+
+    bool visible() const { return _visible; }
+
+    /* Refresh config page if already showing (call from loop when seq changes). */
+    void refreshIfVisible(const NodeConfig &cfg, bool radioOk, uint32_t seq);
 
 private:
     static const uint32_t DISPLAY_TIMEOUT_MS = 20000;
+    static const uint32_t HOLD_THRESH_MS     =   800;
+    static const uint32_t SLEEP_THRESH_MS    =  8000;
+
     uint8_t  _btn = 0;
     bool     _visible = false;
     uint32_t _shownAt = 0;
     uint32_t _lastDraw = 0;
-    bool     _lastBtn = false;     /* debounced pressed-state (true = pressed) */
-    bool     _rawLast = false;     /* last raw pressed-state sample */
-    uint32_t _btnChangedAt = 0;
+    bool     _lastRaw = false;
+    uint32_t _pressedAt = 0;      /* millis() when current press started */
+    bool     _pressed = false;    /* button is currently down */
+    bool     _sleepFired = false; /* SLEEP event already emitted this press */
 
-    void render(const NodeConfig &cfg, bool radioOk, uint32_t seq);
-    void off();
+    /* Cached for refresh */
+    const NodeConfig *_cfgPtr = nullptr;
+    bool     _radioOk = false;
+    uint32_t _seq = 0;
+
+    bool     _showingConfig = false;
+
+    void renderConfig(const NodeConfig &cfg, bool radioOk, uint32_t seq);
+    void ensureInit();
 };
 
-/* 16-bit PSK fingerprint (safe to display; derived via the AEAD under a
-   nonce that can never occur on the wire). Two boards showing the same
-   4 hex digits hold the same key. */
 uint16_t pskFingerprint(const uint8_t psk[32]);

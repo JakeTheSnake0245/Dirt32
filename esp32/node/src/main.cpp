@@ -172,7 +172,7 @@ static void sendAlert(uint8_t event_class, uint8_t confidence, uint16_t peak) {
                   out == TxOutcome::SENT_NO_ACK ? "sent (no ack)" : "RADIO ERROR");
 }
 
-static void sendHeartbeat() {
+static void sendHeartbeat(bool deployFlag = false) {
     GpsFix fix = cfg.gps_enable ? acquireGps(cfg.gps_fix_timeout_s) : GpsFix{};
     sps_heartbeat_t hb = {};
     hb.timestamp = nowUnix(fix);
@@ -183,7 +183,8 @@ static void sendHeartbeat() {
                       (fix.valid ? SPS_HF_GPS_FIX : 0) |
                       (selfTestOk ? SPS_HF_SELFTEST : 0) |
                       (rtc_tamper ? SPS_HF_TAMPER : 0) |
-                      (onSolar() ? SPS_HF_ON_SOLAR : 0);
+                      (onSolar() ? SPS_HF_ON_SOLAR : 0) |
+                      (deployFlag ? SPS_HF_DEPLOY : 0);
     hb.noise_floor = detector.noiseFloor();
     hb.fw_version = SPS_FW_VERSION;
     hb.reset_count = rtc_reset_count;
@@ -194,12 +195,12 @@ static void sendHeartbeat() {
     int n = sps_seal_heartbeat(cfg.psk, cfg.net_id, cfg.node_id, seq, &hb,
                                frame, sizeof(frame));
     if (n <= 0) { Serial.printf("[hb] seal err %d\n", n); return; }
-    /* Heartbeats are true single-shot TX — no retransmit burst, no ACK
-       window (spec §5.2): liveness is statistical across the day. */
+    /* Heartbeats are single-shot TX — no retransmit burst, no ACK window. */
     bool ok = link_.sendOnce(frame, (size_t)n);
     rtc_tamper = false;
-    Serial.printf("[hb] seq=%lu batt=%umV -> %s\n", (unsigned long)seq,
-                  hb.battery_mv, ok ? "sent" : "RADIO ERROR");
+    Serial.printf("[hb] seq=%lu batt=%umV%s -> %s\n", (unsigned long)seq,
+                  hb.battery_mv, deployFlag ? " DEPLOY" : "",
+                  ok ? "sent" : "RADIO ERROR");
 }
 
 /* ---------- Sampling / detection loop ---------- */
@@ -254,7 +255,8 @@ static void printHelp() {
         "  detector <seconds>   stream STA/LTA ratio for tuning\n"
         "  selftest             run front-end self test\n"
         "  seqreset             reset SEQ to 0 (ONLY after PSK rotation)\n"
-        "  screen               show link-debug page on the OLED (or press PRG)\n"
+        "  screen               show link-config page on the OLED\n"
+        "                       PRG tap=deploy hb, hold=config, 8s=sleep\n"
         "  gpstest [secs]       stream raw NMEA from the L76K (default 30s)\n"
         "  gpsfix               acquire+print a parsed GPS fix\n"
         "  sleep                enter deep sleep now\n"
@@ -321,7 +323,7 @@ static void handleCli(String line) {
         Serial.println("SEQ reset. Only valid after a PSK rotation (keygen+save) "
                        "and re-registration at the gateway.");
     }
-    else if (cmd == "screen") dbgScreen.show(cfg, radioOk, rtc_seq);
+    else if (cmd == "screen") dbgScreen.showConfig(cfg, radioOk, rtc_seq);
     else if (cmd.startsWith("gpstest")) {
         uint16_t secs = (uint16_t)cmd.substring(7).toInt();
         if (secs == 0) secs = 30;
@@ -422,8 +424,33 @@ void loop() {
         } else lineBuf += c;
     }
 
-    /* PRG button → link-debug OLED page */
-    dbgScreen.poll(cfg, radioOk, rtc_seq);
+    /* PRG button — three tiers:
+     *   TAP   (< 800 ms)  → GPS fix + deploy heartbeat; node appears on map
+     *   HOLD  (800 ms–8s) → show link-config OLED page
+     *   SLEEP (8 s held)  → deep sleep (soft power-down) */
+    switch (dbgScreen.poll()) {
+        case BtnEvent::TAP: {
+            Serial.println("[deploy] TAP — sending deploy heartbeat...");
+            dbgScreen.showMessage("DEPLOYING...", "GPS fix...", nullptr);
+            sendHeartbeat(/*deployFlag=*/true);
+            /* After TX, show config page so user can verify params on screen */
+            dbgScreen.showConfig(cfg, radioOk, rtc_seq);
+            break;
+        }
+        case BtnEvent::HOLD:
+            dbgScreen.showConfig(cfg, radioOk, rtc_seq);
+            break;
+        case BtnEvent::SLEEP:
+            Serial.println("[btn] 8s hold — entering deep sleep.");
+            dbgScreen.showMessage("SLEEPING...", nullptr, nullptr);
+            delay(800);   /* let the user read it */
+            goToSleep();
+            break;
+        case BtnEvent::NONE:
+        default:
+            dbgScreen.refreshIfVisible(cfg, radioOk, rtc_seq);
+            break;
+    }
 
     /* Geophone continuous-listen profile */
     if (cfg.front_end == FE_GEOPHONE && sensorOk) {

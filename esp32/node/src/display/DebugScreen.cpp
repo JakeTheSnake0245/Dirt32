@@ -4,10 +4,8 @@
 
 static OledRaw oled;
 
+/* ---------- PSK fingerprint (safe to display) ---------- */
 uint16_t pskFingerprint(const uint8_t psk[32]) {
-    /* Wire nonces are NODE_ID(2)|TYPE(1)|SEQ(3)|000000 — the last 6 bytes are
-       always zero. A nonce with a non-zero tail is therefore guaranteed
-       disjoint from every nonce ever used to protect real traffic. */
     static const uint8_t fpNonce[12] =
         { 'S','P','S','-','F','P','R','\xA5','\xA5','\xA5','\xA5','\xA5' };
     const uint8_t zero[2] = {0, 0};
@@ -16,31 +14,56 @@ uint16_t pskFingerprint(const uint8_t psk[32]) {
     return ((uint16_t)ct[0] << 8) | ct[1];
 }
 
-void DebugScreen::begin(uint8_t buttonPin) {
-    _btn = buttonPin;
-    pinMode(_btn, INPUT_PULLUP);
-}
-
-void DebugScreen::show(const NodeConfig &cfg, bool radioOk, uint32_t seq) {
-    if (!oled.begin()) return;         /* powers Vext, full re-init on wake */
-    render(cfg, radioOk, seq);
-    _visible = true;
-    _shownAt = millis();
+/* ---------- Internals ---------- */
+void DebugScreen::ensureInit() {
+    if (!oled.ready()) oled.begin();
 }
 
 void DebugScreen::off() {
     oled.sleep();
     _visible = false;
-    /* Leave Vext as-is: the sensor front-end shares the rail; main.cpp
-       owns overall Ve power policy. */
+    _showingConfig = false;
 }
 
-void DebugScreen::render(const NodeConfig &cfg, bool radioOk, uint32_t seq) {
+/* ---------- Public: show pages ---------- */
+void DebugScreen::showConfig(const NodeConfig &cfg, bool radioOk, uint32_t seq) {
+    ensureInit();
+    _cfgPtr = &cfg; _radioOk = radioOk; _seq = seq;
+    renderConfig(cfg, radioOk, seq);
+    _visible = true;
+    _showingConfig = true;
+    _shownAt = millis();
+    _lastDraw = millis();
+}
+
+void DebugScreen::showMessage(const char *line1, const char *line2, const char *line3) {
+    ensureInit();
+    oled.clear();
+    if (line1) oled.text(0, 2, line1);
+    if (line2) oled.text(0, 4, line2);
+    if (line3) oled.text(0, 6, line3);
+    oled.flush();
+    _visible = true;
+    _showingConfig = false;
+    _shownAt = millis();
+    _lastDraw = millis();
+}
+
+void DebugScreen::refreshIfVisible(const NodeConfig &cfg, bool radioOk, uint32_t seq) {
+    if (!_visible || !_showingConfig) return;
+    uint32_t now = millis();
+    if (now - _shownAt > DISPLAY_TIMEOUT_MS) { off(); return; }
+    if (now - _lastDraw > 1000) {
+        renderConfig(cfg, radioOk, seq);
+        _lastDraw = now;
+    }
+}
+
+/* ---------- Config page render ---------- */
+void DebugScreen::renderConfig(const NodeConfig &cfg, bool radioOk, uint32_t seq) {
     char line[32];
     oled.clear();
 
-    /* Everything on this page except NODE/SEQ/radio must MATCH on both
-       boards for them to communicate. */
     snprintf(line, sizeof(line), "NET %u   NODE %u", cfg.net_id, cfg.node_id);
     oled.text(0, 0, line);
 
@@ -58,36 +81,47 @@ void DebugScreen::render(const NodeConfig &cfg, bool radioOk, uint32_t seq) {
              (int)cfg.tx_power_dbm);
     oled.text(0, 5, line);
 
-    snprintf(line, sizeof(line), "SEQ %lu  RADIO %s", (unsigned long)seq,
-             radioOk ? "OK" : "FAIL");
+    snprintf(line, sizeof(line), "SEQ %lu  %s", (unsigned long)seq,
+             radioOk ? "RADIO OK" : "RADIO FAIL");
     oled.text(0, 7, line);
 
     if (!oled.flush()) Serial.println("[oled] render flush failed");
 }
 
-void DebugScreen::poll(const NodeConfig &cfg, bool radioOk, uint32_t seq) {
+/* ---------- Button poll — three tiers ---------- */
+BtnEvent DebugScreen::poll() {
     bool raw = (digitalRead(_btn) == LOW);
     uint32_t now = millis();
+    BtnEvent ev = BtnEvent::NONE;
 
-    /* Debounce: raw state must be stable 40 ms before we accept it. */
-    if (raw != _rawLast) { _rawLast = raw; _btnChangedAt = now; }
-    if ((now - _btnChangedAt) > 40 && raw != _lastBtn) {
-        _lastBtn = raw;
-        if (raw) {                        /* accepted press edge */
-            if (_visible) off();          /* second press hides it */
-            else show(cfg, radioOk, seq);
-            /* show() blocks long enough that `now` is stale — using it
-               against the fresh _shownAt underflows the unsigned math and
-               instantly re-blanks the screen. Start clean next tick. */
-            return;
+    if (raw && !_pressed) {
+        /* Press start */
+        _pressed = true;
+        _pressedAt = now;
+        _sleepFired = false;
+    } else if (_pressed && raw) {
+        /* Held down — fire SLEEP at threshold without waiting for release */
+        if (!_sleepFired && (now - _pressedAt) >= SLEEP_THRESH_MS) {
+            _sleepFired = true;
+            ev = BtnEvent::SLEEP;
         }
+    } else if (_pressed && !raw) {
+        /* Released */
+        uint32_t held = now - _pressedAt;
+        _pressed = false;
+        if (!_sleepFired) {
+            if (held < HOLD_THRESH_MS)
+                ev = BtnEvent::TAP;
+            else
+                ev = BtnEvent::HOLD;
+        }
+        /* If SLEEP already fired, discard the release — return NONE */
     }
 
-    if (_visible) {
-        if (now - _shownAt > DISPLAY_TIMEOUT_MS) off();
-        else if (now - _lastDraw > 1000) {    /* refresh SEQ once a second */
-            render(cfg, radioOk, seq);
-            _lastDraw = now;
-        }
-    }
+    return ev;
+}
+
+void DebugScreen::begin(uint8_t buttonPin) {
+    _btn = buttonPin;
+    pinMode(_btn, INPUT_PULLUP);
 }
