@@ -16,10 +16,88 @@
  */
 #include <Arduino.h>
 #include <RadioLib.h>
+#include <oled_raw.h>
 
 static Module mod(LORA_NSS, LORA_DIO1, LORA_RST, LORA_BUSY);
 static SX1262 radio(&mod);
 static bool radioUp = false;
+
+/* ---------- status screen (onboard OLED) ----------
+ * The bridge is USB-powered on the Pi, so the screen stays on.
+ * PRG button toggles it (some prefer it dark in the field).      */
+static OledRaw oled;
+static bool     scrOn = true;
+static uint32_t rxCount = 0, txCount = 0;
+static float    lastRssi = 0, lastSnr = 0;
+static uint32_t lastRxAt = 0, lastHostAt = 0;   /* millis(); 0 = never */
+static float    cfgFreq = 0; static int cfgSf = 0, cfgNet = 0;
+
+#ifndef PIN_BUTTON
+#define PIN_BUTTON 0
+#endif
+
+static void scrRender() {
+    char line[32];
+    uint32_t now = millis();
+    oled.clear();
+
+    snprintf(line, sizeof(line), "DIRT32 BRIDGE  %s",
+             radioUp ? "RX-ON" : "NO RF");
+    oled.text(0, 0, line);
+
+    if (cfgFreq > 0)
+        snprintf(line, sizeof(line), "NET %d  %.1fMHz SF%d", cfgNet, cfgFreq, cfgSf);
+    else
+        snprintf(line, sizeof(line), "AWAITING CFG (defaults)");
+    oled.text(0, 1, line);
+
+    snprintf(line, sizeof(line), "RX %lu   TX %lu",
+             (unsigned long)rxCount, (unsigned long)txCount);
+    oled.text(0, 3, line);
+
+    if (rxCount > 0) {
+        snprintf(line, sizeof(line), "LAST %.0fdBm %.1fdB", lastRssi, lastSnr);
+        oled.text(0, 4, line);
+        uint32_t ago = (now - lastRxAt) / 1000;
+        snprintf(line, sizeof(line), "%lus AGO", (unsigned long)ago);
+        oled.text(0, 5, line);
+    } else {
+        oled.text(0, 4, "NO FRAMES YET");
+    }
+
+    /* host = Pi daemon; it PINGs/CFGs over USB serial */
+    if (lastHostAt == 0)
+        snprintf(line, sizeof(line), "HOST: NEVER SEEN");
+    else if (now - lastHostAt < 15000)
+        snprintf(line, sizeof(line), "HOST: OK");
+    else
+        snprintf(line, sizeof(line), "HOST: SILENT %lus",
+                 (unsigned long)((now - lastHostAt) / 1000));
+    oled.text(0, 7, line);
+
+    oled.flush();
+}
+
+static void scrPoll() {
+    static bool rawLast = false, btnLast = false;
+    static uint32_t changedAt = 0, lastDraw = 0;
+    bool raw = (digitalRead(PIN_BUTTON) == LOW);
+    uint32_t now = millis();
+    if (raw != rawLast) { rawLast = raw; changedAt = now; }
+    if ((now - changedAt) > 40 && raw != btnLast) {
+        btnLast = raw;
+        if (raw) {                       /* press toggles the screen */
+            scrOn = !scrOn;
+            if (scrOn) { if (oled.begin()) scrRender(); }
+            else oled.sleep();
+            return;                      /* start clean next tick */
+        }
+    }
+    if (scrOn && oled.ready() && now - lastDraw > 1000) {
+        scrRender();
+        lastDraw = now;
+    }
+}
 
 static int hexVal(char c) {
     if (c >= '0' && c <= '9') return c - '0';
@@ -43,6 +121,8 @@ static void handleLine(String &line) {
     line.trim();
     if (line.length() == 0) return;
 
+    lastHostAt = millis();               /* any line = the Pi is alive */
+
     if (line == "PING") { Serial.println("OK PING"); return; }
 
     if (line.startsWith("CFG ")) {
@@ -53,6 +133,7 @@ static void handleLine(String &line) {
             return;
         }
         radioUp = applyCfg(f, sf, bw, cr, net, pwr);
+        if (radioUp) { cfgFreq = f; cfgSf = sf; cfgNet = net; }
         Serial.println(radioUp ? "OK CFG" : "ERR CFG radio");
         if (radioUp) Serial.println("RDY");
         return;
@@ -71,6 +152,7 @@ static void handleLine(String &line) {
         }
         int st = radio.transmit(buf, n);
         radio.startReceive();               /* back to listening immediately */
+        if (st == RADIOLIB_ERR_NONE) txCount++;
         Serial.println(st == RADIOLIB_ERR_NONE ? "OK TX" : "ERR TX radio");
         return;
     }
@@ -88,6 +170,9 @@ void setup() {
        connects; the daemon always sends CFG on open. */
     radioUp = applyCfg(903.0f, 10, 125.0f, 5, 1, 10);
     Serial.println(radioUp ? "RDY" : "ERR boot radio");
+
+    pinMode(PIN_BUTTON, INPUT_PULLUP);
+    if (oled.begin()) scrRender();       /* USB-powered: screen on by default */
 }
 
 void loop() {
@@ -111,9 +196,12 @@ void loop() {
                 for (int i = 0; i < len; i++)
                     sprintf(hex + i * 2, "%02x", buf[i]);
                 Serial.printf("RX %s %.0f %.1f\n", hex, rssi, snr);
+                rxCount++; lastRssi = rssi; lastSnr = snr; lastRxAt = millis();
             }
             radio.startReceive();
         }
     }
+
+    scrPoll();
     delay(2);
 }
