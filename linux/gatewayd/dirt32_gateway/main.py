@@ -25,7 +25,7 @@ DEFAULT_CONFIG = {
               "net_id": 1, "tx_power_dbm": 20},
     "db_path": "dirt32.sqlite3",
     "keys_path": "keys.json",
-    "web": {"host": "0.0.0.0", "port": 8080},
+    "web": {"host": "0.0.0.0", "port": 9000},
     "mqtt": {"enabled": True, "host": "127.0.0.1", "port": 1883},
     "status": {"yellow_silence_s": 43200, "red_silence_s": 86400,
                "low_battery_mv": 3300, "move_threshold_m": 30.0},

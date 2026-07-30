@@ -45,7 +45,7 @@ Then:
 
 ## Web GUI — the blackbox map
 
-`http://<pi-ip>:8080`
+`http://<pi-ip>:9000`
 
 Dark map with one dot per sensor:
 

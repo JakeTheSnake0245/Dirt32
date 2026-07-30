@@ -47,6 +47,6 @@ systemctl daemon-reload
 systemctl enable --now dirt32-gateway
 
 echo
-echo "Done. Web GUI: http://$(hostname -I | awk '{print $1}'):8080"
+echo "Done. Web GUI: http://$(hostname -I | awk '{print $1}'):9000"
 echo "MQTT:          mosquitto_sub -t 'dirt32/#' -v"
 echo "Logs:          journalctl -u dirt32-gateway -f"

@@ -108,7 +108,7 @@ def make_handler(db: Db, feed: EventFeed, status_cfg: dict):
     return Handler
 
 
-def serve(db: Db, feed: EventFeed, status_cfg: dict, host="0.0.0.0", port=8080):
+def serve(db: Db, feed: EventFeed, status_cfg: dict, host="0.0.0.0", port=9000):
     httpd = ThreadingHTTPServer((host, port), make_handler(db, feed, status_cfg))
     t = threading.Thread(target=httpd.serve_forever, daemon=True, name="web")
     t.start()
