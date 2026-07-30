@@ -247,6 +247,10 @@ void DebugScreen::poll(const NodeConfig &cfg, bool radioOk, uint32_t seq) {
         if (raw) {                        /* accepted press edge */
             if (_visible) off();          /* second press hides it */
             else show(cfg, radioOk, seq);
+            /* show() blocks long enough that `now` is stale — using it
+               against the fresh _shownAt underflows the unsigned math and
+               instantly re-blanks the screen. Start clean next tick. */
+            return;
         }
     }
 

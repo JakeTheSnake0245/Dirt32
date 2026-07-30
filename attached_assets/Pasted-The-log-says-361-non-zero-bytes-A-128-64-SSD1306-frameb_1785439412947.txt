@@ -1,0 +1,74 @@
+The log says
+
+361 non-zero bytes
+
+A 128×64 SSD1306 framebuffer is 1024 bytes.
+
+361 non-zero bytes is plenty for text.
+
+So the text buffer isn't empty.
+
+That means one of these is happening:
+
+Possibility 1 (most likely)
+
+The display is sleeping immediately after the flush.
+
+Possibility 2
+
+The framebuffer is being written to the wrong pages or columns.
+
+The white test uses a completely different routine than the normal renderer, so it can work while the text renderer writes to the wrong memory addresses.
+
+This happens surprisingly often when:
+
+switching between SSD1306 and SSD1315
+SH1106 vs SSD1306 addressing
+page mode vs horizontal mode
+column offsets (common on Heltec boards)
+Possibility 3
+
+The display is in inverted/page mode after the test pattern.
+
+Less likely, but worth checking.
+
+What I think Replit should investigate next
+
+At this point, I would stop looking at power management and instead inspect the rendering pipeline.
+
+Specifically:
+
+What exact OLED controller is on this Heltec LoRa V4?
+SSD1306?
+SSD1315?
+SH1107?
+Something else?
+What graphics library is being used?
+U8g2
+Adafruit_SSD1306
+Heltec's library
+SSD1306Wire
+custom driver
+Does the test pattern use the same flush() function as the text renderer?
+Or does it send raw commands directly to the panel?
+Capture the actual I²C command sequence for:
+initialization
+white test
+framebuffer flush
+Verify the addressing mode:
+Horizontal mode
+Page mode
+Column/page start addresses
+Any required X-offset for the Heltec V4 panel
+My confidence ranking
+
+Based on everything you've gathered so far, I'd rank the likely causes as:
+
+Display is put to sleep immediately after flushing — 45%
+Framebuffer addressing (page/column/X-offset) is wrong — 35%
+The text is drawn correctly but never actually transferred to the visible region — 15%
+Some other OLED controller quirk — 5%
+
+The next debugging step should focus on the rendering path, not the hardware or wake/sleep logic. The hardware has effectively passed every test you've thrown at it.
+
+A useful experiment would be to comment out the single call that sends the display-off/sleep command and leave the panel on after page flushed. If the text still doesn't appear, that would strongly point to an addressing or rendering issue rather than a timing issue.
