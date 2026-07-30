@@ -1,0 +1,107 @@
+ *  Executing task: platformio run --target upload --target monitor --environment heltec_v4 
+
+Processing heltec_v4 (platform: espressif32; board: heltec_wifi_lora_32_V3; framework: arduino)
+-----------------------------------------------------------------------------------------------------------------------------------------------------
+Verbose mode can be enabled via `-v, --verbose` option
+CONFIGURATION: https://docs.platformio.org/page/boards/espressif32/heltec_wifi_lora_32_V3.html
+PLATFORM: Espressif 32 (7.0.1) > Heltec WiFi LoRa 32 (V3)
+HARDWARE: ESP32S3 240MHz, 320KB RAM, 8MB Flash
+DEBUG: Current (cmsis-dap) External (cmsis-dap, esp-bridge, esp-builtin, esp-prog, iot-bus-jtag, jlink, minimodule, olimex-arm-usb-ocd, olimex-arm-usb-ocd-h, olimex-arm-usb-tiny-h, olimex-jtag-tiny, tumpa)
+PACKAGES: 
+ - framework-arduinoespressif32 @ 3.20017.241212+sha.dcc1105b 
+ - tool-esptoolpy @ 2.41100.0 (4.11.0) 
+ - tool-mkfatfs @ 2.0.1 
+ - tool-mklittlefs @ 1.203.210628 (2.3) 
+ - tool-mkspiffs @ 2.230.0 (2.30) 
+ - toolchain-riscv32-esp @ 8.4.0+2021r2-patch5 
+ - toolchain-xtensa-esp32s3 @ 8.4.0+2021r2-patch5
+LDF: Library Dependency Finder -> https://bit.ly/configure-pio-ldf
+LDF Modes: Finder ~ chain, Compatibility ~ soft
+Found 37 compatible libraries
+Scanning dependencies...
+Dependency Graph
+|-- RadioLib @ 6.6.0
+|-- ArduinoJson @ 7.4.3
+|-- Preferences @ 2.0.0
+|-- sps_proto
+|-- oled_raw
+|-- SPI @ 2.0.0
+Building in release mode
+Retrieving maximum program size .pio/build/heltec_v4/firmware.elf
+Checking size .pio/build/heltec_v4/firmware.elf
+Advanced Memory Usage is available via "PlatformIO Home > Project Inspect"
+RAM:   [=         ]   7.0% (used 22992 bytes from 327680 bytes)
+Flash: [=         ]  11.9% (used 396709 bytes from 3342336 bytes)
+Configuring upload protocol...
+AVAILABLE: cmsis-dap, esp-bridge, esp-builtin, esp-prog, espota, esptool, iot-bus-jtag, jlink, minimodule, olimex-arm-usb-ocd, olimex-arm-usb-ocd-h, olimex-arm-usb-tiny-h, olimex-jtag-tiny, tumpa
+CURRENT: upload_protocol = esptool
+Looking for upload port...
+Auto-detected: /dev/cu.usbmodem1101
+Uploading .pio/build/heltec_v4/firmware.bin
+esptool.py v4.11.0
+Serial port /dev/cu.usbmodem1101
+Connecting...
+Chip is ESP32-S3 (QFN56) (revision v0.2)
+Features: WiFi, BLE, Embedded PSRAM 2MB (AP_3v3)
+Crystal is 40MHz
+USB mode: USB-Serial/JTAG
+MAC: 8c:fd:49:b5:a5:9c
+Uploading stub...
+Running stub...
+Stub running...
+Changing baud rate to 460800
+Changed.
+Configuring flash size...
+Flash will be erased from 0x00000000 to 0x00003fff...
+Flash will be erased from 0x00008000 to 0x00008fff...
+Flash will be erased from 0x0000e000 to 0x0000ffff...
+Flash will be erased from 0x00010000 to 0x00070fff...
+SHA digest in image updated
+Compressed 15104 bytes to 10430...
+Writing at 0x00000000... (100 %)
+Wrote 15104 bytes (10430 compressed) at 0x00000000 in 0.2 seconds (effective 579.6 kbit/s)...
+Hash of data verified.
+Compressed 3072 bytes to 146...
+Writing at 0x00008000... (100 %)
+Wrote 3072 bytes (146 compressed) at 0x00008000 in 0.0 seconds (effective 596.1 kbit/s)...
+Hash of data verified.
+Compressed 8192 bytes to 47...
+Writing at 0x0000e000... (100 %)
+Wrote 8192 bytes (47 compressed) at 0x0000e000 in 0.1 seconds (effective 854.2 kbit/s)...
+Hash of data verified.
+Compressed 397136 bytes to 230335...
+Writing at 0x00010000... (6 %)
+Writing at 0x0001b13e... (13 %)
+Writing at 0x00028919... (20 %)
+Writing at 0x0002dfd0... (26 %)
+Writing at 0x00033a5c... (33 %)
+Writing at 0x00039274... (40 %)
+Writing at 0x0003ec55... (46 %)
+Writing at 0x0004485b... (53 %)
+Writing at 0x00049bdc... (60 %)
+Writing at 0x0004f286... (66 %)
+Writing at 0x00054b95... (73 %)
+Writing at 0x0005a14f... (80 %)
+Writing at 0x000629a7... (86 %)
+Writing at 0x0006aa97... (93 %)
+Writing at 0x000709b4... (100 %)
+Wrote 397136 bytes (230335 compressed) at 0x00010000 in 2.5 seconds (effective 1275.6 kbit/s)...
+Hash of data verified.
+
+Leaving...
+Hard resetting via RTS pin...
+--- Terminal on /dev/cu.usbmodem1101 | 115200 8-N-1
+--- Available filters and text transformations: debug, default, direct, esp32_exception_decoder, hexlify, log2file, nocontrol, printable, send_on_enter, time
+--- More details at https://bit.ly/pio-monitor-filters
+--- Quit: Ctrl+C | Menu: Ctrl+T | Help: Ctrl+T followed by Ctrl+H
+
+=== Dirt32 node ===
+node_id=1 net_id=1 fw=1 reset_reason=0
+[boot] radio init...
+[boot] radio OK
+[boot] sensor rail + SPI...
+[boot] sensor front-end init...
+[sensor] front-end init FAILED (taptest still works)
+[boot] detector init...
+Bench mode — CLI active. `help` for commands.
+Press PRG button (or `screen`) for the link-debug display.
