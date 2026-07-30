@@ -25,6 +25,8 @@ class SerialLink:
         self._wlock = threading.Lock()
         self._stop = threading.Event()
         self._last_cfg = 0.0
+        self._last_write = 0.0          # tracks last line sent for keepalive
+        self._PING_INTERVAL = 10.0      # seconds — must be < bridge SILENT threshold (15s)
 
     # -- port handling ------------------------------------------------------
 
@@ -61,6 +63,7 @@ class SerialLink:
             if self._fd is not None:
                 try:
                     os.write(self._fd, (line + "\n").encode())
+                    self._last_write = time.time()
                 except OSError:
                     self._close()
 
@@ -85,6 +88,11 @@ class SerialLink:
                 if not self._open():
                     time.sleep(3)
                     continue
+            # Keepalive: PING the bridge every 10 s so its HOST indicator
+            # stays green even when no nodes are transmitting.
+            if time.time() - self._last_write > self._PING_INTERVAL:
+                self.write_line("PING")
+
             try:
                 chunk = os.read(self._fd, 512)
             except OSError:
