@@ -193,9 +193,11 @@ void loop() {
             if (st == RADIOLIB_ERR_NONE) {
                 float rssi = radio.getRSSI(), snr = radio.getSNR();
                 char hex[132];
+                memset(hex, 0, sizeof(hex));   /* ensure null-terminated */
                 for (int i = 0; i < len; i++)
                     sprintf(hex + i * 2, "%02x", buf[i]);
-                Serial.printf("RX %s %.0f %.1f\n", hex, rssi, snr);
+                Serial.printf("RX %s %d %d\n", hex,
+                              (int)rssi, (int)(snr * 10));  /* integer to avoid float fmt bugs */
                 rxCount++; lastRssi = rssi; lastSnr = snr; lastRxAt = millis();
             }
             radio.startReceive();

@@ -118,15 +118,15 @@ class SerialLink:
                 try:
                     frame = bytes.fromhex(parts[1])
                 except ValueError:
-                    self.log(f"[serial] dropped garbled RX line")
+                    self.log(f"[serial] dropped garbled RX line: {line!r}")
                     return
-                def _f(s):
-                    try:
-                        return float(s)
-                    except (ValueError, TypeError):
-                        return None
-                rssi = _f(parts[2]) if len(parts) > 2 else None
-                snr = _f(parts[3]) if len(parts) > 3 else None
+                def _i(s):
+                    try: return int(s)
+                    except (ValueError, TypeError): return None
+                rssi = _i(parts[2]) if len(parts) > 2 else None
+                # SNR sent as snr*10 integer to avoid float printf bugs
+                snr_raw = _i(parts[3]) if len(parts) > 3 else None
+                snr = snr_raw / 10.0 if snr_raw is not None else None
                 self.on_frame(frame, rssi, snr)
             elif line == "RDY":
                 # Bridge (re)booted — it is back on its default radio config,
