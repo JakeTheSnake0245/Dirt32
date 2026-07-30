@@ -1,0 +1,177 @@
+After looking through Heltec community discussions, Arduino Forum posts, the OLED controller datasheets, and Reddit threads, I think there is enough evidence to narrow this down.
+
+Findings
+1. The OLED hardware itself appears to be functioning correctly (High confidence)
+
+Your log shows:
+
+probe 0x3C -> ACK
+panel init OK
+test pattern (all pixels ON) sent OK
+page flushed (361 non-zero bytes)
+
+This means:
+
+I²C bus is working.
+The OLED controller responds.
+The display initializes successfully.
+Pixel data is actually being transmitted.
+
+That makes a wiring or dead-display issue unlikely.
+
+2. The firmware is intentionally putting the display to sleep (Very high confidence)
+
+Every display update is immediately followed by
+
+[oled] off (sleep)
+
+The SSD1306/SSD1315 command set uses:
+
+0xAE = Display OFF
+0xAF = Display ON
+
+Those are intended for sleep mode, not normal frame updates.
+
+3. Heltec developers specifically recommend displayOff() only for power saving
+
+A Heltec forum moderator explains that:
+
+display.displayOff();
+display.displayOn();
+
+is the intended way to save power, but the display generally needs to be reinitialized after being turned back on.
+
+That lines up almost perfectly with your log:
+
+re-init on wake OK
+page flushed
+off (sleep)
+
+The code is entering a sleep/wake cycle after every refresh instead of remaining awake.
+
+4. This looks like a display state-machine problem, not an OLED driver problem
+
+The sequence
+
+show()
+flush()
+off()
+show()
+flush()
+off()
+
+suggests one of the following:
+
+screen timeout set to 0
+display manager believes it is idle
+bench mode forces screen sleep
+state machine never enters "active" mode
+screen request flag immediately clears
+
+This behavior is not consistent with a hardware failure.
+
+5. One additional clue
+
+Your boot log contains
+
+[sensor] front-end init FAILED
+
+If the firmware is designed so that the "normal UI" only starts after successful sensor initialization, it may be stuck permanently in a boot/diagnostic state that repeatedly refreshes and then sleeps the OLED.
+
+I would investigate whether the failed sensor initialization prevents the display task from transitioning into its normal operational state.
+
+Turnover Prompt for Replit
+
+Copy this directly into Replit:
+
+We need to debug a Heltec LoRa V4 ESP32-S3 firmware project.
+
+Problem
+
+The OLED display initializes successfully but immediately goes to sleep after every refresh.
+
+Boot log:
+
+[oled] show() called
+probe 0x3C -> ACK
+panel init OK
+test pattern (all pixels ON) sent OK
+page flushed (361 non-zero bytes in buffer)
+off (sleep)
+
+show()
+re-init on wake OK
+page flushed
+off (sleep)
+
+show()
+re-init on wake OK
+page flushed
+off (sleep)
+
+The OLED hardware is not believed to be defective because:
+
+I²C probe succeeds.
+Panel initialization succeeds.
+Test pattern transmits successfully.
+Framebuffer flushes successfully.
+
+Heltec community discussions indicate that display.displayOff() is intended only for power saving, and the display generally requires reinitialization after waking. The current firmware appears to be entering this sleep cycle continuously instead of remaining active. Community reports also note that display wake/sleep handling on Heltec boards is sensitive and often tied to firmware state management.
+
+There is also this boot error
+[sensor] front-end init FAILED
+
+Determine whether this prevents the UI from entering its normal runtime state.
+
+Perform the following investigation
+Find every location that calls:
+displayOff()
+displayOn()
+sleep()
+wake()
+show()
+display.display()
+SSD1306/SSD1315 command 0xAE
+SSD1306/SSD1315 command 0xAF
+Build a call graph showing every code path that results in:
+show()
+↓
+flush framebuffer
+↓
+display off
+Identify every screen timeout mechanism, including variables such as:
+screenTimeout
+displayTimeout
+autoOff
+idleTimeout
+sleepAfter
+displayRequested
+displayActive
+uiState
+Verify whether Bench Mode intentionally forces the OLED off.
+Determine whether the failed sensor front-end initialization prevents the display task from reaching its normal UI state.
+Trace the display state machine from boot until the OLED is turned off.
+Produce a timeline similar to:
+Boot
+ ↓
+Display init
+ ↓
+Splash screen
+ ↓
+show()
+ ↓
+displayOff() called by <function>
+ ↓
+Reason: <condition evaluated true>
+Recommend the smallest code change that keeps the display awake while debugging without permanently removing the power-saving functionality.
+Deliverables
+Exact source file(s)
+Function names
+Line numbers
+Call stack
+State transition diagram
+Root cause
+Minimal patch
+Explanation of why the OLED enters sleep immediately after every successful refresh
+
+Do not rewrite the display driver unless it is proven defective. Assume the hardware is functioning correctly unless evidence proves otherwise.

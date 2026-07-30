@@ -158,7 +158,7 @@ static void oledPower(bool on) {
 }
 
 void DebugScreen::show(const NodeConfig &cfg, bool radioOk, uint32_t seq) {
-    Serial.println("[oled] show() called");
+    Serial.printf("[oled] t=%lu show() called\n", (unsigned long)millis());
     oledPower(true);
     if (!oledInit) {
         delay(100);                        /* Vext + charge pump settle */
@@ -172,11 +172,6 @@ void DebugScreen::show(const NodeConfig &cfg, bool radioOk, uint32_t seq) {
                       Wire.endTransmission() == 0 ? "ACK" : "no response");
         if (!oledPanelInit()) return;
         Serial.println("[oled] panel init OK");
-        /* test pattern: all pixels ON for 1 s */
-        memset(fb, 0xFF, sizeof(fb));
-        if (!oledFlush()) return;
-        Serial.println("[oled] test pattern (all pixels ON) sent OK");
-        delay(1000);
         oledInit = true;
     } else {
         /* Re-run the full init on every wake: the SSD1315's charge pump
@@ -184,8 +179,16 @@ void DebugScreen::show(const NodeConfig &cfg, bool radioOk, uint32_t seq) {
            while still ACKing every write. Init is idempotent and takes
            only a few ms. */
         if (!oledPanelInit()) return;
-        Serial.println("[oled] re-init on wake OK");
+        Serial.printf("[oled] t=%lu re-init on wake OK\n", (unsigned long)millis());
     }
+    /* Diagnostic (every show): all pixels ON for 300 ms. If you see this
+       flash but not the page after it, the panel displays dense data but
+       not the sparse text buffer — report exactly that. */
+    memset(fb, 0xFF, sizeof(fb));
+    if (!oledFlush()) return;
+    Serial.printf("[oled] t=%lu test pattern (all pixels ON) sent OK\n",
+                  (unsigned long)millis());
+    delay(300);
     render(cfg, radioOk, seq);
     _visible = true;
     _shownAt = millis();
@@ -193,7 +196,7 @@ void DebugScreen::show(const NodeConfig &cfg, bool radioOk, uint32_t seq) {
 
 void DebugScreen::off() {
     if (oledInit) oledCmd(0xAE);           /* display OFF (sleep) */
-    Serial.println("[oled] off (sleep)");
+    Serial.printf("[oled] t=%lu off (sleep)\n", (unsigned long)millis());
     _visible = false;
     /* Leave Vext as-is: the sensor front-end shares the rail; main.cpp
        owns overall Ve power policy. */
@@ -229,7 +232,8 @@ void DebugScreen::render(const NodeConfig &cfg, bool radioOk, uint32_t seq) {
     int lit = 0;
     for (size_t i = 0; i < sizeof(fb); i++) if (fb[i]) lit++;
     if (!oledFlush()) Serial.println("[oled] render flush failed");
-    else Serial.printf("[oled] page flushed (%d non-zero bytes in buffer)\n", lit);
+    else Serial.printf("[oled] t=%lu page flushed (%d non-zero bytes in buffer)\n",
+                       (unsigned long)millis(), lit);
 }
 
 void DebugScreen::poll(const NodeConfig &cfg, bool radioOk, uint32_t seq) {
