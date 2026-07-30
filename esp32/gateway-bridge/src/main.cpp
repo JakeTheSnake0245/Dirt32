@@ -80,6 +80,9 @@ static void handleLine(String &line) {
 
 void setup() {
     Serial.begin(115200);
+    /* Native USB-CDC: wait briefly for the host to enumerate. */
+    uint32_t t0 = millis();
+    while (!Serial && millis() - t0 < 2000) delay(10);
     delay(300);
     /* Default config so the bridge hears something before the daemon
        connects; the daemon always sends CFG on open. */

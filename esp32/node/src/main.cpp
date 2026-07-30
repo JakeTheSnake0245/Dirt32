@@ -340,6 +340,10 @@ static void handleCli(String line) {
 /* ---------- Boot ---------- */
 void setup() {
     Serial.begin(115200);
+    /* Native USB-CDC: give the host a moment to enumerate so early boot
+       prints aren't lost. Don't block forever — field nodes have no host. */
+    uint32_t t0 = millis();
+    while (!Serial && millis() - t0 < 2000) delay(10);
 
     esp_reset_reason_t rr = esp_reset_reason();
     if (rr == ESP_RST_BROWNOUT || rr == ESP_RST_WDT || rr == ESP_RST_TASK_WDT)
