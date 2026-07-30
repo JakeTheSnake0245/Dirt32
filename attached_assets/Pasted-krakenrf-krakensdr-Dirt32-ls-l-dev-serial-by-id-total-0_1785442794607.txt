@@ -1,0 +1,81 @@
+krakenrf@krakensdr:~/Dirt32 $ ls -l /dev/serial/by-id/
+total 0
+lrwxrwxrwx 1 root root 13 Jul 30 20:56 usb-Espressif_USB_JTAG_serial_debug_unit_8C:FD:49:B5:A4:90-if00 -> ../../ttyACM1
+lrwxrwxrwx 1 root root 13 Jul 30 17:11 usb-u-blox_AG_-_www.u-blox.com_u-blox_7_-_GPS_GNSS_Receiver-if00 -> ../../ttyACM0
+krakenrf@krakensdr:~/Dirt32 $ sudo nano /etc/dirt32/gateway.json
+krakenrf@krakensdr:~/Dirt32 $ sudo nano /etc/dirt32/gateway.json
+krakenrf@krakensdr:~/Dirt32 $ sudo nano /etc/dirt32/keys.json
+krakenrf@krakensdr:~/Dirt32 $ sudo systemctl restart dirt32-gateway
+sudo journalctl -u dirt32-gateway -f     # watch the logs
+Jul 30 21:19:31 krakensdr python3[57779]:   File "/usr/lib/python3.11/json/decoder.py", line 337, in decode
+Jul 30 21:19:31 krakensdr python3[57779]:     obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+Jul 30 21:19:31 krakensdr python3[57779]:                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Jul 30 21:19:31 krakensdr python3[57779]:   File "/usr/lib/python3.11/json/decoder.py", line 353, in raw_decode
+Jul 30 21:19:31 krakensdr python3[57779]:     obj, end = self.scan_once(s, idx)
+Jul 30 21:19:31 krakensdr python3[57779]:                ^^^^^^^^^^^^^^^^^^^^^^
+Jul 30 21:19:31 krakensdr python3[57779]: json.decoder.JSONDecodeError: Expecting property name enclosed in double quotes: line 1 column 2 (char 1)
+Jul 30 21:19:31 krakensdr python3[57779]: [cfg] loaded /etc/dirt32/gateway.json
+Jul 30 21:19:31 krakensdr systemd[1]: dirt32-gateway.service: Main process exited, code=exited, status=1/FAILURE
+Jul 30 21:19:31 krakensdr systemd[1]: dirt32-gateway.service: Failed with result 'exit-code'.
+Jul 30 21:19:36 krakensdr systemd[1]: dirt32-gateway.service: Scheduled restart job, restart counter is at 216.
+Jul 30 21:19:36 krakensdr systemd[1]: Stopped dirt32-gateway.service - Dirt32 perimeter gateway (ingest + MQTT + web GUI).
+Jul 30 21:19:36 krakensdr systemd[1]: Started dirt32-gateway.service - Dirt32 perimeter gateway (ingest + MQTT + web GUI).
+Jul 30 21:19:36 krakensdr python3[57794]: Traceback (most recent call last):
+Jul 30 21:19:36 krakensdr python3[57794]:   File "<frozen runpy>", line 198, in _run_module_as_main
+Jul 30 21:19:36 krakensdr python3[57794]:   File "<frozen runpy>", line 88, in _run_code
+Jul 30 21:19:36 krakensdr python3[57794]:   File "/opt/dirt32/gatewayd/dirt32_gateway/main.py", line 113, in <module>
+Jul 30 21:19:36 krakensdr python3[57794]:     main()
+Jul 30 21:19:36 krakensdr python3[57794]:   File "/opt/dirt32/gatewayd/dirt32_gateway/main.py", line 76, in main
+Jul 30 21:19:36 krakensdr python3[57794]:     keys = load_keys(cfg["keys_path"])
+Jul 30 21:19:36 krakensdr python3[57794]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Jul 30 21:19:36 krakensdr python3[57794]:   File "/opt/dirt32/gatewayd/dirt32_gateway/main.py", line 60, in load_keys
+Jul 30 21:19:36 krakensdr python3[57794]:     raw = json.load(f)
+Jul 30 21:19:36 krakensdr python3[57794]:           ^^^^^^^^^^^^
+Jul 30 21:19:36 krakensdr python3[57794]:   File "/usr/lib/python3.11/json/__init__.py", line 293, in load
+Jul 30 21:19:36 krakensdr python3[57794]:     return loads(fp.read(),
+Jul 30 21:19:36 krakensdr python3[57794]:            ^^^^^^^^^^^^^^^^
+Jul 30 21:19:36 krakensdr python3[57794]:   File "/usr/lib/python3.11/json/__init__.py", line 346, in loads
+Jul 30 21:19:36 krakensdr python3[57794]:     return _default_decoder.decode(s)
+Jul 30 21:19:36 krakensdr python3[57794]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+Jul 30 21:19:36 krakensdr python3[57794]:   File "/usr/lib/python3.11/json/decoder.py", line 337, in decode
+Jul 30 21:19:36 krakensdr python3[57794]:     obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+Jul 30 21:19:36 krakensdr python3[57794]:                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Jul 30 21:19:36 krakensdr python3[57794]:   File "/usr/lib/python3.11/json/decoder.py", line 353, in raw_decode
+Jul 30 21:19:36 krakensdr python3[57794]:     obj, end = self.scan_once(s, idx)
+Jul 30 21:19:36 krakensdr python3[57794]:                ^^^^^^^^^^^^^^^^^^^^^^
+Jul 30 21:19:36 krakensdr python3[57794]: json.decoder.JSONDecodeError: Expecting property name enclosed in double quotes: line 1 column 2 (char 1)
+Jul 30 21:19:36 krakensdr python3[57794]: [cfg] loaded /etc/dirt32/gateway.json
+Jul 30 21:19:36 krakensdr systemd[1]: dirt32-gateway.service: Main process exited, code=exited, status=1/FAILURE
+Jul 30 21:19:36 krakensdr systemd[1]: dirt32-gateway.service: Failed with result 'exit-code'.
+Jul 30 21:19:41 krakensdr systemd[1]: dirt32-gateway.service: Scheduled restart job, restart counter is at 217.
+Jul 30 21:19:41 krakensdr systemd[1]: Stopped dirt32-gateway.service - Dirt32 perimeter gateway (ingest + MQTT + web GUI).
+Jul 30 21:19:41 krakensdr systemd[1]: Started dirt32-gateway.service - Dirt32 perimeter gateway (ingest + MQTT + web GUI).
+Jul 30 21:19:41 krakensdr python3[57805]: Traceback (most recent call last):
+Jul 30 21:19:41 krakensdr python3[57805]:   File "<frozen runpy>", line 198, in _run_module_as_main
+Jul 30 21:19:41 krakensdr python3[57805]:   File "<frozen runpy>", line 88, in _run_code
+Jul 30 21:19:41 krakensdr python3[57805]:   File "/opt/dirt32/gatewayd/dirt32_gateway/main.py", line 113, in <module>
+Jul 30 21:19:41 krakensdr python3[57805]:     main()
+Jul 30 21:19:41 krakensdr python3[57805]:   File "/opt/dirt32/gatewayd/dirt32_gateway/main.py", line 76, in main
+Jul 30 21:19:41 krakensdr python3[57805]:     keys = load_keys(cfg["keys_path"])
+Jul 30 21:19:41 krakensdr python3[57805]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Jul 30 21:19:41 krakensdr python3[57805]:   File "/opt/dirt32/gatewayd/dirt32_gateway/main.py", line 60, in load_keys
+Jul 30 21:19:41 krakensdr python3[57805]:     raw = json.load(f)
+Jul 30 21:19:41 krakensdr python3[57805]:           ^^^^^^^^^^^^
+Jul 30 21:19:41 krakensdr python3[57805]:   File "/usr/lib/python3.11/json/__init__.py", line 293, in load
+Jul 30 21:19:41 krakensdr python3[57805]:     return loads(fp.read(),
+Jul 30 21:19:41 krakensdr python3[57805]:            ^^^^^^^^^^^^^^^^
+Jul 30 21:19:41 krakensdr python3[57805]:   File "/usr/lib/python3.11/json/__init__.py", line 346, in loads
+Jul 30 21:19:41 krakensdr python3[57805]:     return _default_decoder.decode(s)
+Jul 30 21:19:41 krakensdr python3[57805]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+Jul 30 21:19:41 krakensdr python3[57805]:   File "/usr/lib/python3.11/json/decoder.py", line 337, in decode
+Jul 30 21:19:41 krakensdr python3[57805]:     obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+Jul 30 21:19:41 krakensdr python3[57805]:                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Jul 30 21:19:41 krakensdr python3[57805]:   File "/usr/lib/python3.11/json/decoder.py", line 353, in raw_decode
+Jul 30 21:19:41 krakensdr python3[57805]:     obj, end = self.scan_once(s, idx)
+Jul 30 21:19:41 krakensdr python3[57805]:                ^^^^^^^^^^^^^^^^^^^^^^
+Jul 30 21:19:41 krakensdr python3[57805]: json.decoder.JSONDecodeError: Expecting property name enclosed in double quotes: line 1 column 2 (char 1)
+Jul 30 21:19:41 krakensdr python3[57805]: [cfg] loaded /etc/dirt32/gateway.json
+Jul 30 21:19:41 krakensdr systemd[1]: dirt32-gateway.service: Main process exited, code=exited, status=1/FAILURE
+Jul 30 21:19:41 krakensdr systemd[1]: dirt32-gateway.service: Failed with result 'exit-code'.
+^C
+krakenrf@krakensdr:~/Dirt32 $ 
