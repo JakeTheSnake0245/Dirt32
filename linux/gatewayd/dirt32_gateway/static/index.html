@@ -101,7 +101,8 @@ function renderNodes(nodes) {
   const pts = [];
   for (const n of nodes) {
     counts[n.color] = (counts[n.color] || 0) + 1;
-    const hasPos = n.lat || n.lon;
+    const hasPos = n.lat !== null && n.lat !== undefined
+                && n.lon !== null && n.lon !== undefined;
     if (hasPos) {
       pts.push([n.lat, n.lon]);
       if (!markers[n.node_id]) {

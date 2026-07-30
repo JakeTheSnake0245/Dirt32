@@ -77,12 +77,16 @@ def make_handler(db: Db, feed: EventFeed, status_cfg: dict):
                 out = []
                 for n in db.all_nodes():
                     color, reasons = classify(n, status_cfg)
-                    lat = n.get("hb_lat_e7") or n.get("lat_e7") or 0
-                    lon = n.get("hb_lon_e7") or n.get("lon_e7") or 0
+                    lat_e7 = n.get("hb_lat_e7") or n.get("lat_e7") or 0
+                    lon_e7 = n.get("hb_lon_e7") or n.get("lon_e7") or 0
+                    # Only pass a position when we actually have one —
+                    # 0,0 is falsy in JS and places the dot in the ocean.
+                    has_pos = (lat_e7 != 0 or lon_e7 != 0)
                     out.append({
                         "node_id": n["node_id"], "name": n.get("name"),
                         "color": color, "reasons": reasons,
-                        "lat": lat / 1e7, "lon": lon / 1e7,
+                        "lat": lat_e7 / 1e7 if has_pos else None,
+                        "lon": lon_e7 / 1e7 if has_pos else None,
                         "last_seen": n.get("last_seen"),
                         "battery_mv": n.get("battery_mv"),
                         "health_flags": n.get("health_flags"),
