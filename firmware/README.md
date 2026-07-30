@@ -196,6 +196,54 @@ SEQ 129  RADIO OK
   the opposite, add `-DVE_ACTIVE_LOW` to `build_flags`.
 - **Pin map:** LoRa + sensor pins in `platformio.ini` — check against your
   V4 silk/schematic and harness before first power-up.
+
+## Wiring the seismic sensors
+
+Both drivers are built and selectable at runtime — no reflash needed:
+`set front_end adxl355` or `set front_end geophone`, then `save`, `reboot`,
+and `selftest` to verify. Both sensors share the SPI bus with the LoRa
+radio (SCK = GPIO9, MISO = GPIO11, MOSI = GPIO10); each device gets its own
+chip-select.
+
+> ⚠️ GPIO 2, 5, 7, and 46 are used **internally** by the V4's RF power
+> amplifier. Never connect anything to them.
+
+### Option A — ADXL355 (digital, SPI) — recommended first
+
+| ADXL355 pin | V4 pin | Notes |
+|-------------|--------|-------|
+| VDD + VDDIO | Ve (3.3 V switched) | powered down during sleep between events |
+| GND         | GND    | |
+| SCLK        | GPIO9  | shared SPI clock |
+| MOSI (SDA)  | GPIO10 | shared |
+| MISO (SDO)  | GPIO11 | shared |
+| CS          | GPIO26 | dedicated chip-select |
+| INT1        | GPIO6  | motion-wake interrupt (RTC-capable → wakes from deep sleep) |
+
+### Option B — SM-24 geophone + ADS1220 (analog front-end)
+
+| ADS1220 pin | V4 pin | Notes |
+|-------------|--------|-------|
+| DVDD/AVDD   | Ve (3.3 V switched) | |
+| GND         | GND    | |
+| SCLK        | GPIO9  | shared SPI clock |
+| DIN (MOSI)  | GPIO10 | shared |
+| DOUT (MISO) | GPIO11 | shared |
+| CS          | GPIO33 | dedicated chip-select |
+| DRDY        | GPIO4  | data-ready, polled |
+| AIN0 / AIN1 | SM-24 coil ± | differential input, PGA gain 32 |
+
+The SM-24 connects directly to the ADS1220's differential inputs (add the
+usual damping resistor across the coil per the SM-24 datasheet, ~1 kΩ).
+
+### Bench verification order
+
+1. Wire the sensor, cold-boot to the CLI.
+2. `selftest` — checks device ID over SPI (ADXL355) / conversion sanity.
+3. `detector 30` — streams the live STA/LTA ratio; tap the desk and watch
+   it spike. Tune `trigger_ratio` until desk-taps trigger and footsteps of
+   people walking nearby behave the way you want.
+4. `taptest` — full chain: detection event → encrypted ALERT over the air.
 - **Battery divider:** calibrate `readBatteryMv()` against a meter.
 
 ## Security model (spec §4.2, §10)
