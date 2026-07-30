@@ -188,16 +188,22 @@ void loop() {
     if (radioUp) {
         int len = radio.getPacketLength(false);
         if (len > 0 && len <= 64) {
-            uint8_t buf[64];
+            uint8_t buf[64] = {};           /* zero so stale stack bytes print "00" not garbage */
             int st = radio.readData(buf, len);
             if (st == RADIOLIB_ERR_NONE) {
                 float rssi = radio.getRSSI(), snr = radio.getSNR();
                 char hex[132];
-                memset(hex, 0, sizeof(hex));   /* ensure null-terminated */
+                memset(hex, 0, sizeof(hex));
                 for (int i = 0; i < len; i++)
                     sprintf(hex + i * 2, "%02x", buf[i]);
-                Serial.printf("RX %s %d %d\n", hex,
-                              (int)rssi, (int)(snr * 10));  /* integer to avoid float fmt bugs */
+                /* Use Serial.print() chain — printf on USB CDC can silently
+                   truncate mid-character on ESP32-S3, producing odd-length hex */
+                Serial.print("RX ");
+                Serial.print(hex);
+                Serial.print(' ');
+                Serial.print((int)rssi);
+                Serial.print(' ');
+                Serial.println((int)(snr * 10));
                 rxCount++; lastRssi = rssi; lastSnr = snr; lastRxAt = millis();
             }
             radio.startReceive();
