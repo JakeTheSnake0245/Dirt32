@@ -1,0 +1,265 @@
+# Distributed Seismic Perimeter Sensor System — Authoritative Build Specification
+
+> **How to use this document.** This is the single source of truth for building the system. Section 1 is the readable end-state and intent. Sections 2+ are the granular, implementation-level spec — wire formats, parameters, state machines, and connection details. Anything an engineer or coding agent implements must conform to the field names, sizes, and behaviors defined here.
+
+---
+
+## 1. Overview & Intent (End State)
+
+**What it is.** A distributed, low-power, RF-linked unattended ground sensor (UGS) network that detects **footsteps and vehicles** via buried seismic sensors and reports events to a central portal. It is the UGS layer of a larger perimeter-surveillance effort, deployed in dry border soil.
+
+**End state.** Some number of buried **sensor nodes** sit silent, sipping battery. When one detects ground motion it classifies the event and transmits a short, encrypted LoRa **ALERT**. Independently, each node emits a periodic **HEARTBEAT** (user-programmable, a few times a day) carrying position, battery, and health. Transmissions are picked up by one or more **relays** and forwarded to a **gateway** (Raspberry Pi + ESP32 LoRa) that decrypts, deduplicates, and bridges to **IP or cellular** backhaul. A local **web portal** shows every node on a map, its live status, and any alerts.
+
+**Design philosophy.**
+- **Quiet by default.** Nodes never propagate, never route, never listen for peers. They speak only on detection or on the heartbeat schedule. This minimizes both RF signature and power draw.
+- **Dumb leaves, smart edge.** Nodes are simple originators. All aggregation, dedup, correlation, and state live at the gateway.
+- **Everything field-programmable.** Frequencies, LoRa parameters, detection thresholds, heartbeat rate, retransmit policy — all runtime-configurable without reflashing.
+- **Authenticated and confidential.** Every frame is AEAD-encrypted with per-node keys; a captured node cannot compromise the field or forge alerts beyond itself.
+
+**Tiers.**
+1. **Sensor node** — Heltec V4 + seismic front-end, buried, battery/solar.
+2. **Relay** — two variants: (a) dual-radio (RX-only + TX-only, frequency-offset), (b) single-radio (half-duplex). Both store-and-forward.
+3. **Gateway** — RPi + ESP32 LoRa → IP/cellular, hosts ingest + portal.
+4. **Portal** — web map, status board, alert feed.
+
+---
+
+## 2. System Topology & Data Flow
+
+```
+ [Sensor Node] ---.
+ [Sensor Node] ----\        INBOUND freq (f_in)      OUTBOUND freq (f_out)
+ [Sensor Node] -----+--> ((( RELAY ))) --------------> ((( GATEWAY ESP32 )))
+ [Sensor Node] ----/         store & forward                 | UART
+ [Sensor Node] --'                                           v
+                                                       [ Raspberry Pi ]
+                                                        ingest/dedupe/decrypt
+                                                        SQLite + WebSocket
+                                                            |        \
+                                                            v         v
+                                                     [ Web Portal ]  [ IP/Cellular backhaul
+                                                      map/status/      → MQTT/HTTPS/CoT→TAK ]
+                                                      alerts ]
+```
+
+- **Uplink only, by default.** Data flows node → relay → gateway. There is no routine downlink; nodes do not listen except for an optional brief ACK window (Section 4.6).
+- **Two RF channels.** Nodes transmit on **f_in**; relays retransmit on **f_out**. The gateway listens on **f_out**. This separation is mandatory for the dual-radio relay (Section 6a) and recommended for all variants so relay output never collides with node input.
+
+---
+
+## 3. RF Plan & Channelization
+
+- **Band:** US915 ISM (902–928 MHz). Use only the US915 board variants.
+- **f_in (node → relay):** default **903.0 MHz** (low end).
+- **f_out (relay → gateway):** default **927.0 MHz** (high end). ~24 MHz separation gives the dual-radio relay filter headroom.
+- **LoRa params (default, all programmable):** SF10, BW 125 kHz, CR 4/5, explicit header, PHY CRC on, sync word = `NET_ID` derived. SF range SF7–SF12.
+- **Node TX power:** default +17 dBm, max +22 dBm, programmable.
+- **Relay TX power:** default the minimum that reaches the gateway (start +14 dBm) — lower relay TX eases desense and airtime.
+- **Airtime reference (30-byte frame):** ~330 ms at SF10/125k, ~1.3 s at SF12. Keep SF as low as range allows. Heartbeats and alerts are short; hold total channel airtime low, and mind FCC dwell/hopping if TX power is high.
+
+---
+
+## 4. Message Protocol (Wire Format)
+
+All multi-byte integers are **little-endian**. All frames share a header (authenticated as AAD), an encrypted payload, and an auth tag. LoRa PHY CRC covers bit errors; the auth tag covers integrity/authenticity.
+
+### 4.1 Common Header (8 bytes, plaintext / AAD)
+
+| Offset | Field      | Size | Notes |
+|-------:|------------|:----:|-------|
+| 0 | `MAGIC`      | 1 | `0xA5` — protocol/version marker |
+| 1 | `NET_ID`     | 1 | Deployment segregation; also seeds LoRa sync word |
+| 2 | `MSG_TYPE`   | 1 | `0x01`=ALERT, `0x02`=HEARTBEAT, `0x03`=ACK |
+| 3 | `NODE_ID`    | 2 | Source node (dest node for ACK) |
+| 5 | `SEQ`        | 3 | Monotonic per-node counter; nonce base; replay key |
+
+### 4.2 Encryption
+
+- **Cipher:** AEAD — ChaCha20-Poly1305 (or AES-128-CCM). 16-byte auth tag.
+- **Key:** per-node 256-bit (or 128-bit for AES) pre-shared key, provisioned at flash time. Gateway holds the key registry.
+- **Nonce (12 bytes):** `NODE_ID(2) || MSG_TYPE(1) || SEQ(3) || 0x00*6`. Unique per (node, message) because `SEQ` is monotonic.
+- **AAD:** the 8-byte common header.
+- **Frame on air:** `HEADER(8) || CIPHERTEXT(n) || TAG(16)`.
+
+### 4.3 ALERT payload (plaintext before encryption)
+
+| Field         | Size | Notes |
+|---------------|:----:|-------|
+| `TIMESTAMP`   | 4 | Unix seconds (GPS-derived if available) |
+| `EVENT_CLASS` | 1 | 0=unknown, 1=footstep, 2=vehicle, 3=multiple |
+| `CONFIDENCE`  | 1 | STA/LTA ratio scaled 0–255 |
+| `PEAK_AMP`    | 2 | Peak band-passed amplitude |
+| `BATTERY_mV`  | 2 | For at-a-glance health with the alert |
+
+### 4.4 HEARTBEAT payload
+
+| Field          | Size | Notes |
+|----------------|:----:|-------|
+| `TIMESTAMP`    | 4 | Unix seconds |
+| `BATTERY_mV`   | 2 | |
+| `LAT`          | 4 | int32, degrees × 1e7 |
+| `LON`          | 4 | int32, degrees × 1e7 |
+| `HEALTH_FLAGS` | 1 | bit0 sensor OK, bit1 GPS fix valid, bit2 self-test pass, bit3 tamper/motion since last, bit4 on solar |
+| `NOISE_FLOOR`  | 2 | Ambient seismic baseline (for remote threshold tuning) |
+| `FW_VERSION`   | 1 | |
+| `RESET_COUNT`  | 2 | Watchdog/brownout diagnostics |
+
+### 4.5 ACK payload (optional, downlink)
+
+| Field      | Size | Notes |
+|------------|:----:|-------|
+| `ACK_SEQ`  | 3 | The `SEQ` being acknowledged |
+| `STATUS`   | 1 | 0=received OK, 1=received duplicate |
+
+### 4.6 Reliability model
+
+- **v1 (baseline): blind retransmit.** Node sends ALERT `RETX_COUNT` times (default 3) with randomized inter-tx jitter (default 200–800 ms) to dodge collisions when multiple nodes trip together. Gateway deduplicates on `(NODE_ID, SEQ)`.
+- **v2 (optional): closed-loop ACK.** Node opens a short RX window (default 500 ms) on **f_in** after its bursts; the relay's RX radio (or the gateway via a downlink path) returns an ACK. If received, node stops retransmitting early. See Section 6 for which relay can source ACKs.
+- **Replay protection:** gateway tracks last accepted `SEQ` per node; rejects `SEQ ≤ last` outside a small reordering window (default 8).
+
+---
+
+## 5. Sensor Node
+
+### 5.1 Hardware
+- **Compute/radio:** Heltec WiFi LoRa 32 **V4** (ESP32-S3 + SX1262), US915.
+- **Front-end (choose per node):**
+  - **A — ADXL355** (EVAL-ADXL355-PMDZ), 3.3 V SPI/I2C direct, ~25 µg/√Hz. Supports low-power motion-wake.
+  - **B — SM-24 geophone + ADS1220** 24-bit ADC. Passive element + bias/damping/filter passives. Best weak-signal sensitivity; must listen continuously (no hardware wake) unless an analog tripwire is added.
+- **GPS:** GNSS module (or V4 GNSS interface) for position + time.
+- **Power:** single-cell 3.7 V protected 18650 (parallel pair for the geophone node), JST-1.25 to V4; onboard BMS; optional 5–6 V / 1–2 W solar into the V4 SH1.25 solar input (no external charger).
+- **Mechanical:** aluminum enclosure as coupling mass; sensor bolted metal-to-metal to floor; enclosure coupled to a driven ground stake 15–30 cm, tamped, no air gaps; Z-axis vertical; **antenna exits the metal box via bulkhead SMA** off the IPEX connector; sealed end plates + glands + desiccant.
+
+### 5.2 Firmware behavior
+- **DSP:** sample 250–500 Hz → high-pass ~1–8 Hz → STA/LTA on vertical axis (or vector magnitude) → band-split classify (footstep ~20–80 Hz, vehicle ~2–20 Hz).
+- **Power:**
+  - ADXL355 node: ESP32-S3 deep sleep (~20 µA), accel in low-power activity mode, wake on INT1 motion. Sensor powered from switchable **Ve** (GPIO36 — verify enable polarity on-board), cut in sleep.
+  - Geophone node: ADS1220 must convert continuously (or add comparator tripwire + Ve gating). Treat as always-on / higher-draw; size battery + solar accordingly.
+- **Detection path:** wake → power front-end → sample+detect → on trigger: classify → build+encrypt ALERT → TX ×`RETX_COUNT` with jitter → (optional) ACK window → sleep.
+- **Heartbeat path:** wake on schedule → acquire GPS fix (timeout) → read battery + health → build+encrypt HEARTBEAT → TX → sleep. Heartbeat is the liveness watchdog: a missed heartbeat is the node-down alarm.
+
+### 5.3 Programmable parameters
+`node_id`, `net_id`, `psk`, `f_in`, `sf`, `bw`, `cr`, `tx_power`, `heartbeat_per_day`, `sample_rate_hz`, `hpf_hz`, `sta_ms`, `lta_ms`, `trigger_ratio`, `footstep_band`, `vehicle_band`, `retx_count`, `retx_jitter_ms`, `ack_enable`, `front_end` (ADXL355|GEOPHONE), `motion_wake_enable`, `motion_threshold`, `gps_enable`, `gps_fix_timeout_s`.
+
+---
+
+## 6. Relay — Two Variants
+
+Common to both: receive on **f_in**, validate `MAGIC`/`NET_ID`, deduplicate on `(NODE_ID, SEQ)` within a sliding window, forward each unique frame **once** on **f_out**. Relays do **not** decrypt — they forward opaque frames (the gateway holds keys). Config via USB-serial CLI or WiFi captive portal.
+
+### 6a. Dual-radio relay (RX-only + TX-only)
+
+- **Hardware:** 2× Heltec V3. **RX board** tuned to f_in, receives continuously. **TX board** tuned to f_out, transmits. The two ESP32s are linked by **UART**: RX board validates + dedupes, pushes unique frames to TX board, which queues and transmits.
+- **Why:** a single SX1262 is half-duplex and goes deaf while transmitting. Split radios give continuous inbound listening with concurrent outbound retransmit — **no missed packets**.
+- **Desense mitigation (all required, not just frequency offset):**
+  - **Frequency separation** ≥ ~20–24 MHz (f_in low, f_out high).
+  - **Antenna isolation:** physical separation ≥ ~1 m where possible, cross-polarize, shield wall between board compartments.
+  - **RX front-end filter:** SAW/band-pass centered on f_in, target ≥ 40–60 dB rejection at f_out.
+  - **Minimize relay TX power** to what reaches the gateway.
+  - **Goal:** keep TX energy at the RX input below the receiver's blocking threshold. Validate empirically (Section 12).
+- **ACK sourcing:** the TX board is pinned to f_out, so it cannot ACK nodes (nodes listen on f_in). For closed-loop ACK, let the **RX board** transmit brief ACKs on f_in (relaxing "RX-only" momentarily). Otherwise use blind retransmit.
+- **Use when:** node population/traffic is high enough that a deaf window would drop packets, and you can engineer the isolation.
+
+### 6b. Single-radio relay (half-duplex)
+
+- **Hardware:** 1× Heltec V3.
+- **Behavior:** listen on f_in → on receiving a frame, buffer it → retune to f_out → transmit → retune back to f_in. Deaf during retune+TX (~hundreds of ms).
+- **Mitigation for the deaf window:** keep TX bursts short, batch queued frames, listen-before-talk before retuning back. Accept a small miss probability.
+- **Advantages:** no desense problem (never TX and RX at once), one board, cheaper, simpler.
+- **ACK sourcing:** the single radio can ACK nodes on f_in during its inbound phase.
+- **Use when:** node population is small and events are rare — miss probability is negligible.
+
+### 6c. Variant selection
+
+| | Dual-radio (6a) | Single-radio (6b) |
+|---|---|---|
+| Deaf window | None | Yes (~100s ms on TX) |
+| Desense risk | High — needs isolation + filtering | None |
+| Cost/complexity | 2 boards + RF work | 1 board |
+| ACK to nodes | RX board only | Native |
+| Best for | Dense/high-traffic segments | Sparse/quiet segments |
+
+---
+
+## 7. Gateway (RPi + ESP32 LoRa)
+
+- **ESP32 LoRa:** tuned to f_out, receives forwarded frames, streams them to the Pi over **UART** (framed with length + PHY metadata: RSSI, SNR).
+- **Pi head-end services:**
+  1. **Ingest:** parse header, look up per-node key, verify auth tag, decrypt, check replay window, dedupe on `(NODE_ID, SEQ)`.
+  2. **Store:** SQLite tables — `nodes` (id, key ref, last_seen, position, fw), `heartbeats`, `alerts`, `raw_frames` (with RSSI/SNR for link health).
+  3. **Realtime:** WebSocket push of new alerts + status changes to the portal.
+  4. **Backhaul:** forward alerts upstream via MQTT/HTTPS, and/or emit **CoT** events to feed the existing TAK/fusion picture. **Store-and-forward** when cellular drops; sync on reconnect.
+- **Backhaul link:** LTE hat / USB modem, or Ethernet/WiFi.
+- **Programmable:** f_out, LoRa params, key registry path, backhaul endpoint, offline-timeout multiplier.
+
+---
+
+## 8. Web Portal
+
+- **Backend:** FastAPI (or Flask) + SQLite + WebSocket, running on the Pi. REST for history, WebSocket for live push. Works fully offline at the edge.
+- **Frontend:** single-page app; **Leaflet or MapLibre GL** map.
+  - **Map:** one marker per node at its GPS-reported lat/lon. Color = state: green (heartbeat within `k×interval`), amber (stale / low battery), red (active alert). Alert markers pulse.
+  - **Node detail panel:** last heartbeat, battery, RSSI/SNR, position, firmware, health flags, alert history.
+  - **Alert feed:** live banner/toast on ALERT + a timeline/log view. Optional webhook/email/SMS on alert.
+  - **Status table:** all nodes — last-seen, battery, signal, fw, online/offline.
+- **Offline logic:** node is "offline" if no heartbeat within `k ×` its programmed heartbeat interval (default k=3).
+
+---
+
+## 9. Time Synchronization
+
+- **Primary:** GPS-derived time in node payloads → coherent timestamps across nodes → enables cross-node correlation (direction/speed of an intruder walking through the field).
+- **Fallback:** gateway receipt time (less precise; muddied by retransmit/airtime). Prefer GPS wherever a fix is available.
+
+---
+
+## 10. Security & Key Management
+
+- **Per-node PSK** provisioned at flash time; gateway holds the registry.
+- **AEAD** (ChaCha20-Poly1305 / AES-CCM) → confidentiality + authenticity; forged/spoofed alerts are rejected.
+- **Replay protection** via monotonic `SEQ` + per-node last-seen window.
+- **Capture containment:** per-node keys mean one dug-up node exposes only itself; support key **revocation** at the gateway and periodic **rotation**.
+- **Frequency agility:** f_in/f_out are programmable to move off a discovered or jammed channel.
+- Relays never hold keys — they forward opaque ciphertext.
+
+---
+
+## 11. Configuration & Provisioning Model
+
+- **Every tier** stores config as JSON in flash, editable two ways: **USB-serial CLI** and a **WiFi captive-portal** page (relay/gateway). Sensor nodes: USB-serial CLI (+ optional short BLE/WiFi provisioning window at boot).
+- **Provisioning record per node:** `node_id`, `psk`, fixed fallback position, front-end type, initial RF + detection params. Registered on the gateway before deployment.
+
+---
+
+## 12. Open Decisions, Risks & Validation
+
+- **Relay desense (6a):** validate the isolation/filter budget on the bench with both radios live before trusting it; fall back to 6b if you can't hit the blocking margin.
+- **Weak-signal wake:** confirm whether dry-soil footsteps reliably trip the ADXL355 activity threshold; if not, that node runs the continuous-listen power profile.
+- **ACK model:** decide blind-retransmit (v1) vs closed-loop (v2) per segment.
+- **Ve enable polarity (GPIO36):** Heltec docs conflict — verify per board with a meter.
+- **Battery connector polarity:** JST-1.25 not standardized — verify before plugging.
+- **Power validation:** inline power meter on one built node per mode before final battery/solar sizing.
+- **Field re-tune:** expect STA/LTA thresholds to shift from bench to soil.
+- **Detection spacing:** footsteps fade ~5–10 m in dry soil → one node per ~20×20 ft patch, minimal overlap.
+
+---
+
+## 13. Build & Bench-Test Order
+
+1. **Node radio alone** — flash, confirm encrypted ALERT/HEARTBEAT TX on f_in with the bulkhead antenna.
+2. **Node sensor** — front-end reads sane data over USB, no enclosure.
+3. **Verify Ve** powers the sensor (confirm GPIO36 polarity).
+4. **STA/LTA on hand taps** — tune trigger at the desk.
+5. **Single-radio relay (6b)** — end-to-end node → relay → gateway → portal, one channel pair.
+6. **Gateway ingest/decrypt/dedup + portal map** — full path with one node.
+7. **Dual-radio relay (6a)** — bring up with desense budget; compare packet loss vs 6b under load.
+8. **Couple, seal, bury, re-tune** outdoors.
+
+---
+
+## 14. BOM by Tier
+
+- **Sensor node (per):** Heltec V4 US915; EVAL-ADXL355-PMDZ **or** SM-24 + CJMCU-1220 (ADS1220) + passives; GPS module; protected 18650 (or 2× parallel) + JST-1.25 pigtail; 5–6 V/1–2 W solar + SH1.25 pigtail; aluminum enclosure; ground stake/auger; 915 MHz antenna + IPEX→SMA bulkhead; glands, desiccant, standoffs, threadlocker.
+- **Dual-radio relay:** 2× Heltec V3 US915; 2× 915 MHz antennas (isolated/cross-pol); RX band-pass/SAW filter; UART link; shielded enclosure; mains or large battery/solar.
+- **Single-radio relay:** 1× Heltec V3 US915; 915 MHz antenna; enclosure; power.
+- **Gateway:** Raspberry Pi; ESP32 LoRa (US915) + antenna; LTE hat/USB modem or Ethernet/WiFi; SD card; enclosure; power.
