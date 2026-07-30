@@ -1,0 +1,20 @@
+Jul 30 22:41:06 krakensdr systemd[1]: Started dirt32-gateway.service - Dirt32 perimeter gateway (ingest + MQTT + web GUI).
+Jul 30 22:41:06 krakensdr python3[87990]: [cfg] loaded /etc/dirt32/gateway.json
+Jul 30 22:41:06 krakensdr python3[87990]: [cfg] 1 node key(s) loaded
+Jul 30 22:41:06 krakensdr python3[87990]: [web] GUI on http://0.0.0.0:9000
+Jul 30 22:41:06 krakensdr python3[87990]: [serial] opened /dev/ttyACM1
+Jul 30 22:41:06 krakensdr python3[87990]: [serial] bridge ready — syncing radio config
+Jul 30 22:41:06 krakensdr python3[87990]: [serial] bridge ready — syncing radio config
+Jul 30 22:41:28 krakensdr python3[87990]: [alert] node=1 footstep conf=200 rssi=-68
+Jul 30 22:41:28 krakensdr python3[87990]: [mqtt] connected to 127.0.0.1:1883
+Jul 30 22:41:38 krakensdr python3[87990]: [serial] bridge: ERR TX hex
+Jul 30 22:41:46 krakensdr python3[87990]: [serial] dropped garbled RX line: 'RX RX 6a37f0a2b14b01000a12b735839bf81792285ebfc535b2a639fb863a3945bc6a37f0 -68 40'
+Jul 30 22:41:47 krakensdr python3[87990]: [serial] dropped garbled RX line: 'RX RX 6a37f0a2b14b01000a12b735839bf81792285ebfc535b2a639fb863a3945bc6a37f0 -68 40'
+Jul 30 22:41:50 krakensdr python3[87990]: [serial] dropped garbled RX line: 'RX 6a37f0a2b14b01000a12b735839bf81792285ebfc535b2a639fb863a3945bcc6a37f0 -68 40'
+Jul 30 22:41:52 krakensdr python3[87990]: [serial] dropped garbled RX line: 'RX 561190989a4b01000a12b735839bf81792285ebfc535b2a639fb863a3945bb2a639fb863a3945bc6a37f0 -68 7'
+Jul 30 22:41:52 krakensdr python3[87990]: [serial] dropped garbled RX line: 'RX RX 561190989a4b01000a12b735839bf81792285ebfc535b2a639fb863a3945bc6a37f0 -68 7'
+Jul 30 22:43:43 krakensdr python3[87990]: [serial] dropped garbled RX line: 'RX 561190989a4b01000a12b735839bf81792285ebfc535b2a639fb863a3945bfb863a3945bc6a37f0 -68 17'
+Jul 30 22:43:43 krakensdr python3[87990]: [serial] dropped garbled RX line: 'RX RX 561190989a4b01000a12b735839bf81792285ebfc535b2a639fb863a3945bc6a37f0 -68 17'
+Jul 30 22:44:31 krakensdr python3[87990]: [serial] dropped garbled RX line: 'RX RX 561190989a4b01000a12b735839bf81792285ebfc535b2a639fb863a3945bc6a37f0 -68 17'
+Jul 30 22:44:38 krakensdr python3[87990]: [serial] dropped garbled RX line: 'RX RX 561190989a4b01000a12b735839bf81792285ebfc535b2a639fb863a3945bc6a37f0 -68 17'
+

@@ -113,19 +113,26 @@ class SerialLink:
                 return
             if line.startswith("RX "):
                 parts = line.split()
-                if len(parts) < 2:
-                    return
-                try:
-                    frame = bytes.fromhex(parts[1])
-                except ValueError:
+                # Scan for the first token that is a non-empty even-length
+                # hex string.  Under normal operation parts[1] is correct, but
+                # if the bridge emitted a spurious "RX " prefix (USB-CDC split)
+                # we may see "RX RX <hex> …" and need to skip the extra token.
+                hex_idx = None
+                _hex_chars = set("0123456789abcdefABCDEF")
+                for i, tok in enumerate(parts[1:], start=1):
+                    if tok and len(tok) % 2 == 0 and all(c in _hex_chars for c in tok):
+                        hex_idx = i
+                        break
+                if hex_idx is None:
                     self.log(f"[serial] dropped garbled RX line: {line!r}")
                     return
+                frame = bytes.fromhex(parts[hex_idx])
                 def _i(s):
                     try: return int(s)
                     except (ValueError, TypeError): return None
-                rssi = _i(parts[2]) if len(parts) > 2 else None
+                rssi = _i(parts[hex_idx + 1]) if len(parts) > hex_idx + 1 else None
                 # SNR sent as snr*10 integer to avoid float printf bugs
-                snr_raw = _i(parts[3]) if len(parts) > 3 else None
+                snr_raw = _i(parts[hex_idx + 2]) if len(parts) > hex_idx + 2 else None
                 snr = snr_raw / 10.0 if snr_raw is not None else None
                 self.on_frame(frame, rssi, snr)
             elif line == "RDY":
