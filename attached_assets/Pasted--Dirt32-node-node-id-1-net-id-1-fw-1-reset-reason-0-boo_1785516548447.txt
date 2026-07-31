@@ -1,0 +1,154 @@
+=== Dirt32 node ===
+node_id=1 net_id=1 fw=1 reset_reason=0
+[boot] radio init...
+[boot] radio OK
+[boot] sensor rail + SPI...
+[boot] sensor front-end init...
+[sensor] front-end init FAILED (taptest still works)
+[boot] detector init...
+Bench mode — CLI active. `help` for commands.
+Press PRG button (or `screen`) for the link-debug display.
+gpstest 60
+unknown command — try `help`
+gpstest 60
+Powering L76K, streaming raw NMEA for 60s (look for $GxRMC with status 'A')...
+$GNGGA,,,,,,0,00,25.5,,,,,,*64
+$GNGLL,,,,,,V,N*7A
+$GNGSA,A,1,,,,,,,,,,,,,25.5,25.5,25.5,1*01
+$GNGSA,A,1,,,,,,,,,,,,,25.5,25.5,25.5,4*04
+$GPGSV,1,1,00,0*65
+$BDGSV,1,1,00,0*74
+$GNRMC,,V,,,,,,,,,,N,V*37
+$GNVTG,,,,,,,,,N*2E
+$GNZDA,,,,,,*56
+$GNGGA,,,,,,0,00,25.5,,,,,,*64
+$GNGLL,,,,,,V,N*7A
+$GNGSA,A,1,,,,,,,,,,,,,25.5,25.5,25.5,1*01
+$GNGSA,A,1,,,,,,,,,,,,,25.5,25.5,25.5,4*04
+$GPGSV,1,1,00,0*65
+$BDGSV,1,1,00,0*74
+$GNRMC,,V,,,,,,,,,,N,V*37
+$GNVTG,,,,,,,,,N*2E
+$GNZDA,,,,,,*56
+$GPTXT,01,01,01,ANTENNA OPEN*25
+$GNGGA,,,,,,0,00,25.5,,,,,,*64
+$GNGLL,,,,,,V,N*7A
+$GNGSA,A,1,,,,,,,,,,,,,25.5,25.5,25.5,1*01
+$GNGSA,A,1,,,,,,,,,,,,,25.5,25.5,25.5,4*04
+$GPGSV,1,1,00,0*65
+$BDGSV,1,1,00,0*74
+$GNRMC,,V,,,,,,,,,,N,V*37
+$GNVTG,,,,,,,,,N*2E
+$GNZDA,,,,,,*56
+$GPTXT,01,01,01,ANTENNA OPEN*25
+$GNGGA,,,,,,0,00,25.5,,,,,,*64
+$GNGLL,,,,,,V,N*7A
+$GNGSA,A,1,,,,,,,,,,,,,25.5,25.5,25.5,1*01
+$GNGSA,A,1,,,,,,,,,,,,,25.5,25.5,25.5,4*04
+$GPGSV,1,1,00,0*65
+$BDGSV,1,1,00,0*74
+$GNRMC,,V,,,,,,,,,,N,V*37
+$GNVTG,,,,,,,,,N*2E
+$GNZDA,,,,,,*56
+$GPTXT,01,01,01,ANTENNA OPEN*25
+$GNGGA,,,,,,0,00,25.5,,,,,,*64
+$GNGLL,,,,,,V,N*7A
+$GNGSA,A,1,,,,,,,,,,,,,25.5,25.5,25.5,1*01
+$GNGSA,A,1,,,,,,,,,,,,,25.5,25.5,25.5,4*04
+$GPGSV,1,1,00,0*65
+$BDGSV,1,1,00,0*74
+$GNRMC,,V,,,,,,,,,,N,V*37
+$GNVTG,,,,,,,,,N*2E
+$GNZDA,,,,,,*56
+$GPTXT,01,01,01,ANTENNA OPEN*25
+$GNGGA,,,,,,0,00,25.5,,,,,,*64
+$GNGLL,,,,,,V,N*7A
+$GNGSA,A,1,,,,,,,,,,,,,25.5,25.5,25.5,1*01
+$GNGSA,A,1,,,,,,,,,,,,,25.5,25.5,25.5,4*04
+$GPGSV,1,1,00,0*65
+$BDGSV,1,1,00,0*74
+$GNRMC,,V,,,,,,,,,,N,V*37
+$GNVTG,,,,,,,,,N*2E
+$GNZDA,,,,,,*56
+$GPTXT,01,01,01,ANTENNA OPEN*25
+$GNGGA,,,,,,0,00,25.5,,,,,,*64
+$GNGLL,,,,,,V,N*7A
+$GNGSA,A,1,,,,,,,,,,,,,25.5,25.5,25.5,1*01
+$GNGSA,A,1,,,,,,,,,,,,,25.5,25.5,25.5,4*04
+$GPGSV,1,1,00,0*65
+$BDGSV,1,1,00,0*74
+$GNRMC,,V,,,,,,,,,,N,V*37
+$GNVTG,,,,,,,,,N*2E
+$GNZDA,,,,,,*56
+$GPTXT,01,01,01,ANTENNA OPEN*25
+$GNGGA,,,,,,0,00,25.5,,,,,,*64
+$GNGLL,,,,,,V,N*7A
+$GNGSA,A,1,,,,,,,,,,,,,25.5,25.5,25.5,1*01
+$GNGSA,A,1,,,,,,,,,,,,,25.5,25.5,25.5,4*04
+$GPGSV,1,1,00,0*65
+$BDGSV,1,1,00,0*74
+$GNRMC,,V,,,,,,,,,,N,V*37
+$GNVTG,,,,,,,,,N*2E
+$GNZDA,,,,,,*56
+$GPTXT,01,01,01,ANTENNA OPEN*25
+$GNGGA,,,,,,0,00,25.5,,,,,,*64
+$GNGLL,,,,,,V,N*7A
+$GNGSA,A,1,,,,,,,,,,,,,25.5,25.5,25.5,1*01
+$GNGSA,A,1,,,,,,,,,,,,,25.5,25.5,25.5,4*04
+$GPGSV,1,1,00,0*65
+$BDGSV,1,1,00,0*74
+$GNRMC,,V,,,,,,,,,,N,V*37
+$GNVTG,,,,,,,,,N*2E
+$GNZDA,,,,,,*56
+$GPTXT,01,01,01,ANTENNA OPEN*25
+$GNGGA,,,,,,0,00,25.5,,,,,,*64
+$GNGLL,,,,,,V,N*7A
+$GNGSA,A,1,,,,,,,,,,,,,25.5,25.5,25.5,1*01
+$GNGSA,A,1,,,,,,,,,,,,,25.5,25.5,25.5,4*04
+$GPGSV,1,1,00,0*65
+$BDGSV,1,1,00,0*74
+$GNRMC,,V,,,,,,,,,,N,V*37
+$GNVTG,,,,,,,,,N*2E
+$GNZDA,,,,,,*56
+$GPTXT,01,01,01,ANTENNA OPEN*25
+$GNGGA,,,,,,0,00,25.5,,,,,,*64
+$GNGLL,,,,,,V,N*7A
+$GNGSA,A,1,,,,,,,,,,,,,25.5,25.5,25.5,1*01
+$GNGSA,A,1,,,,,,,,,,,,,25.5,25.5,25.5,4*04
+$GPGSV,1,1,00,0*65
+$BDGSV,1,1,00,0*74
+$GNRMC,,V,,,,,,,,,,N,V*37
+$GNVTG,,,,,,,,,N*2E
+$GNZDA,,,,,,*56
+$GPTXT,01,01,01,ANTENNA OPEN*25
+$GNGGA,,,,,,0,00,25.5,,,,,,*64
+$GNGLL,,,,,,V,N*7A
+$GNGSA,A,1,,,,,,,,,,,,,25.5,25.5,25.5,1*01
+$GNGSA,A,1,,,,,,,,,,,,,25.5,25.5,25.5,4*04
+$GPGSV,1,1,00,0*65
+$BDGSV,1,1,00,0*74
+$GNRMC,,V,,,,,,,,,,N,V*37
+$GNVTG,,,,,,,,,N*2E
+$GNZDA,,,,,,*56
+$GPTXT,01,01,01,ANTENNA OPEN*25
+$GNGGA,,,,,,0,00,25.5,,,,,,*64
+$GNGLL,,,,,,V,N*7A
+$GNGSA,A,1,,,,,,,,,,,,,25.5,25.5,25.5,1*01
+$GNGSA,A,1,,,,,,,,,,,,,25.5,25.5,25.5,4*04
+$GPGSV,1,1,00,0*65
+$BDGSV,1,1,00,0*74
+$GNRMC,,V,,,,,,,,,,N,V*37
+$GNVTG,,,,,,,,,N*2E
+$GNZDA,,,,,,*56
+$GPTXT,01,01,01,ANTENNA OPEN*25
+$GNGGA,,,,,,0,00,25.5,,,,,,*64
+$GNGLL,,,,,,V,N*7A
+$GNGSA,A,1,,,,,,,,,,,,,25.5,25.5,25.5,1*01
+$GNGSA,A,1,,,,,,,,,,,,,25.5,25.5,25.5,4*04
+$GPGSV,1,1,00,0*65
+$BDGSV,1,1,00,0*74
+$GNRMC,,V,,,,,,,,,,N,V*37
+$GNVTG,,,,,,,,,N*2E
+$GNZDA,,,,,,*56
+$GPTXT,01,01,01,ANTENNA OPEN*25
+$GNGGA,,,,,,0,00,25.5,,,,,,*64
