@@ -10,6 +10,9 @@ Always call `SPI.begin(/*SCK*/9, /*MISO*/11, /*MOSI*/10, /*SS*/-1)` with explici
 
 **How to apply:** Any SPI initialization in this project (setup(), any library that calls SPI.begin() internally) must use explicit pin arguments. Verify with `gpio_get_level(38)` if GPS ever stops working again.
 
+## Deeper root cause (confirmed later)
+The V3 board JSON builds with `flash_mode=qio` — QIO claims GPIO38 (FSPIWP) for the flash write-protect line at the bootloader level. Heltec's official V4 definition uses `flash_mode=dio` + 4MB flash, which leaves GPIO38 free. Fix: project-local `boards/heltec_wifi_lora_32_V4.json` (dio/4MB) + `variants/heltec_wifi_lora_32_V4/pins_arduino.h` from Heltec's core, with `board_build.variants_dir = variants`. Never build this project with a qio board definition. Keep the explicit `SPI.begin(9,11,10,-1)` as well.
+
 ## Context
 - Board: `heltec_wifi_lora_32_V3` (used as stand-in for V4.3 — no PlatformIO V4 board definition exists)
 - No `heltec_wifi_lora_32_V4` board JSON in platformio/platform-espressif32 or HelTecAutomation/Heltec_ESP32
