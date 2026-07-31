@@ -36,7 +36,13 @@ void configLoad(NodeConfig &cfg) {
     cfg.bw_khz = doc["bw"] | cfg.bw_khz;
     cfg.cr = doc["cr"] | cfg.cr;
     cfg.tx_power_dbm = doc["tx_power"] | cfg.tx_power_dbm;
-    cfg.heartbeat_per_day = doc["heartbeat_per_day"] | cfg.heartbeat_per_day;
+    {
+        uint8_t hpd = doc["heartbeat_per_day"] | cfg.heartbeat_per_day;
+        // Clamp to at most 96/day (every 15 min). Values above this are bench
+        // test pollution — silently reset to the compiled default so a fresh
+        // firmware flash always restores sane behaviour without CLI steps.
+        cfg.heartbeat_per_day = (hpd > 0 && hpd <= 96) ? hpd : 24;
+    }
     cfg.sample_rate_hz = doc["sample_rate_hz"] | cfg.sample_rate_hz;
     cfg.hpf_hz = doc["hpf_hz"] | cfg.hpf_hz;
     cfg.sta_ms = doc["sta_ms"] | cfg.sta_ms;
@@ -131,7 +137,7 @@ bool configSet(NodeConfig &cfg, const String &key, const String &value) {
     if (key == "bw") { cfg.bw_khz = value.toFloat(); return true; }
     if (key == "cr") { int v = value.toInt(); if (v < 5 || v > 8) return false; cfg.cr = v; return true; }
     if (key == "tx_power") { int v = value.toInt(); if (v < -9 || v > 22) return false; cfg.tx_power_dbm = v; return true; }
-    if (key == "heartbeat_per_day") { cfg.heartbeat_per_day = value.toInt(); return true; }
+    if (key == "heartbeat_per_day") { int v = value.toInt(); if (v < 1 || v > 96) return false; cfg.heartbeat_per_day = v; return true; }
     if (key == "sample_rate_hz") { cfg.sample_rate_hz = value.toInt(); return true; }
     if (key == "hpf_hz") { cfg.hpf_hz = value.toFloat(); return true; }
     if (key == "sta_ms") { cfg.sta_ms = value.toInt(); return true; }
