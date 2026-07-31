@@ -1,0 +1,113 @@
+# Turnover: Alert "Thinning" — ACK-Based Retransmit Suppression
+
+## Goal
+Cut redundant LoRa airtime at scale. Today each node blind-retransmits every ALERT
+`MAX_TX` times regardless of whether it was received. "Thinning" means: **once a node
+hears an ACK for an alert, it stops retransmitting immediately**, and duplicates that
+still reach the gateway are collapsed. On good links this turns ~3 transmissions into 1,
+roughly a 3× reduction in the correlated alert bursts that dominate channel load when
+many nodes trip at once.
+
+## Why the current ACKs are flaky (fix while implementing)
+The bridge receives alerts but the node rarely gets an ACK. Root causes to correct:
+1. **ACK sent too late.** The gateway must transmit the ACK *before* decrypt/dedup/MQTT/
+   logging — it has to land inside the node's short post-TX RX window. Processing first,
+   ACK second, misses the window; the occasional success is timing luck.
+2. **ACK on the wrong frequency.** The node listens on `f_in`. The ACK must be sent on
+   `f_in`. (With a relay in path, the relay's **RX** board sources the ACK, not the
+   TX-only board, which is pinned to `f_out`.)
+3. **A `NoneType` crash** on the ingest/ACK path (`'NoneType' object cannot be interpreted
+   as an integer`) — a parsed field is `None` where an int is required. Fix so it can't
+   abort the ACK send.
+
+---
+
+## Protocol contract
+
+### ACK frame (TYPE = 0x03)
+Sent by gateway (or relay) to the node on `f_in`, addressed to the node.
+Payload:
+| Field     | Size | Notes                                   |
+|-----------|:----:|-----------------------------------------|
+| `ACK_SEQ` | 3    | The `SEQ` of the ALERT being acked      |
+| `STATUS`  | 1    | 0 = received OK, 1 = received duplicate  |
+
+A node accepts an ACK only if `NODE_ID` matches and `ACK_SEQ == the seq of the alert it
+is currently retransmitting`.
+
+### Tunable parameters (all runtime-configurable)
+| Name             | Default | Meaning |
+|------------------|:-------:|---------|
+| `MAX_TX`         | 3       | Max transmissions per alert (initial + retries) |
+| `ACK_WAIT_MS`    | 400     | RX-window length after each TX; must exceed gateway turnaround |
+| `RETX_JITTER_MS` | 100–500 | Random extra delay before each retransmit (anti-collision) |
+
+---
+
+## Task A — Node firmware (ESP-IDF / C)
+
+State machine per alert:
+
+```
+on_detection():
+    seq = next_seq()
+    frame = build_alert(seq, class, conf, peak, batt)
+    for attempt in 1..MAX_TX:
+        radio_tx(frame, f_in)
+        radio_rx_start(f_in)                     # flip to RX immediately
+        got = wait_for_ack(seq, ACK_WAIT_MS)     # returns true if matching ACK heard
+        if got:
+            break                                # <-- THINNING: stop retransmitting
+        sleep(random(RETX_JITTER_MS))
+    radio_sleep()
+```
+
+Requirements:
+- `wait_for_ack(seq, timeout)` returns true only for an ACK with matching `NODE_ID` and
+  `ACK_SEQ == seq`. Ignore ACKs for other seqs/nodes.
+- Open the RX window **immediately** after TX completes — no gap that lets the gateway's
+  ACK arrive before the node is listening.
+- Breaking out of the loop on `got` is the whole feature: remaining retransmits are cancelled.
+- If all `MAX_TX` attempts go unacked, give up quietly and sleep (the alert may still have
+  arrived; the gateway dedups). Optionally set a health flag for the next heartbeat.
+
+## Task B — Gateway (Python bridge + ESP32 radio)
+
+On receiving an ALERT frame:
+```
+def on_alert(frame):
+    send_ack(frame.node_id, frame.seq,          # 1) ACK FIRST, on f_in, always
+             status = 1 if is_dup(frame) else 0)  #    (even for duplicates)
+    if is_dup(frame.node_id, frame.seq):        # 2) publish ONCE
+        return
+    mark_seen(frame.node_id, frame.seq)
+    payload = decrypt(frame.payload)
+    publish_mqtt(payload, frame.rssi, frame.snr)
+```
+Requirements:
+- **ACK before any processing** so it lands in the node's RX window. Do not decrypt,
+  publish, or log before sending the ACK.
+- **Always ACK, even duplicates** — a duplicate means the node missed the prior ACK.
+- **Publish only once** per `(NODE_ID, SEQ)` (dedup) — thinning at the data layer.
+- ACK must go out on `f_in` (the node's listen channel). Use `encode_frame(TYPE_ACK, ...)`
+  → the ESP32 transmits it on `f_in`.
+
+## Task C — Relay-side thinning (both variants)
+- **Dedup + forward-once:** collapse `(NODE_ID, SEQ)` retransmits the relay hears; forward
+  each unique alert upstream once.
+- **Optional hop-by-hop ACK (biggest airtime win):** the relay's RX board (on `f_in`) ACKs
+  the node the moment it has the alert, so the node stops retransmitting without waiting for
+  the round trip to the gateway. If enabled, the relay owns getting the alert upstream. Make
+  this a config flag; default off until link reliability is characterized.
+
+---
+
+## Acceptance criteria
+- With a reachable gateway, a node that hears an ACK sends the alert **once** (verify only
+  one on-air transmission when `STATUS` returns before `ACK_WAIT_MS`).
+- With ACKs blocked, the node falls back to exactly `MAX_TX` transmissions, then stops.
+- Gateway ACKs land inside the node's RX window ≥95% of the time under bench conditions
+  (the synthetic taptest should flip from mostly `sent (no ack)` to mostly `ACKED`).
+- Duplicates are ACKed but published to MQTT exactly once.
+- The `NoneType` crash is gone; a malformed field never aborts the ACK send.
+- All three parameters are runtime-configurable, not compile-time constants.
