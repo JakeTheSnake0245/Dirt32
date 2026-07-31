@@ -360,16 +360,23 @@ static void handleCli(String line) {
         delay(1500);   /* 1.5 s: L76K needs ~1 s before first NMEA sentence */
 
         Serial.println("[gpsdiag] EN=HIGH, 9600 baud — scanning RX candidates (5s each)...");
-        Serial.println("[gpsdiag] GPIO  bytes  preview");
-        Serial.println("[gpsdiag] ----  -----  -------");
+        Serial.println("[gpsdiag] RX/TX  bytes  preview");
+        Serial.println("[gpsdiag] -----  -----  -------");
 
         /* Candidate RX pins: schematic GPIO38 plus neighbours and known
-         * alternate mappings seen on V4 board variants and Meshtastic builds. */
-        const uint8_t candidates[] = { 35, 36, 37, 38, 39, 45, 46, 47, 48 };
+         * alternate mappings seen on V4 board variants and Meshtastic builds.
+         * Each entry is {rx, tx} — the swapped case (39/38) is tested explicitly
+         * since the normal scan holds TX=39, which would loopback on rxp=39. */
+        const uint8_t candidates[][2] = {
+            {35,39},{36,39},{37,39},{38,39},
+            {39,38},   /* RX/TX swapped */
+            {45,39},{46,39},{47,39},{48,39}
+        };
         uint8_t winner = 0;
 
-        for (uint8_t rxp : candidates) {
-            Serial2.begin(9600, SERIAL_8N1, rxp, /*TX unused*/39);
+        for (auto &p : candidates) {
+            uint8_t rxp = p[0], txp = p[1];
+            Serial2.begin(9600, SERIAL_8N1, rxp, txp);
             delay(30);
             uint32_t t0 = millis(), count = 0;
             uint8_t preview[32]; uint32_t pIdx = 0;
@@ -382,7 +389,7 @@ static void handleCli(String line) {
                 delay(2);
             }
             Serial2.end();
-            Serial.printf("[gpsdiag]  %2u    %-5lu  ", rxp, (unsigned long)count);
+            Serial.printf("[gpsdiag]  %2u/%2u  %-5lu  ", rxp, txp, (unsigned long)count);
             if (count == 0) {
                 Serial.print("(nothing)");
             } else {

@@ -32,7 +32,12 @@ void GpsUart::powerOn() {
     digitalWrite(PIN_GPS_EN, HIGH);       /* enable VGNSS power rail */
     digitalWrite(PIN_GPS_STANDBY, HIGH);  /* force wake */
     digitalWrite(PIN_GPS_RESET, HIGH);    /* not in reset */
-    delay(1000);                          /* L76K cold-start: ~1 s to first NMEA */
+    delay(200);                           /* rail settle */
+    /* Hardware reset pulse — some L76K boards need this to start outputting */
+    digitalWrite(PIN_GPS_RESET, LOW);
+    delay(100);
+    digitalWrite(PIN_GPS_RESET, HIGH);
+    delay(1000);                          /* L76K: ~1 s after reset to first NMEA */
     gpsSerial.begin(GPS_BAUD, SERIAL_8N1, PIN_GPS_RX, PIN_GPS_TX);
     _len = 0;
     _partial = GpsFixResult{};
