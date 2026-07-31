@@ -262,6 +262,7 @@ static void printHelp() {
         "                       PRG tap=deploy hb, hold=config, 8s=sleep\n"
         "  gpstest [secs]       stream raw NMEA from the L76K (default 30s)\n"
         "  gpsfix               acquire+print a parsed GPS fix\n"
+        "  gpsdiag              low-level GPS wiring/power diagnostic\n"
         "  sleep                enter deep sleep now\n"
         "  reboot");
 }
@@ -341,6 +342,81 @@ static void handleCli(String line) {
         Serial.printf("Acquiring fix (timeout %us)...\n", cfg.gps_fix_timeout_s);
         GpsFix f = acquireGps(cfg.gps_fix_timeout_s);
         if (!f.valid) Serial.println("[gps] NO FIX (needs sky view; cold start can take 30-60s)");
+    }
+    else if (cmd == "gpsdiag") {
+        /* Low-level wiring diagnostic — bypasses GpsUart entirely.
+           Tries three EN states × 5 s each and reports raw byte counts + hex.
+           Pins are the same as GpsUart.h; any mismatch shows up here. */
+        const uint8_t RX_PIN = 38, TX_PIN = 39, EN_PIN = 34,
+                      SBY_PIN = 40, RST_PIN = 42;
+        Serial.printf("[gpsdiag] RX=GPIO%u  TX=GPIO%u  EN=GPIO%u\n",
+                      RX_PIN, TX_PIN, EN_PIN);
+
+        /* Helper lambda: open Serial1, drain for ms_window, close, return count */
+        auto probe = [&](const char *label, bool enState, bool enFloat) -> uint32_t {
+            /* Set EN + standby + reset */
+            if (!enFloat) {
+                pinMode(EN_PIN,  OUTPUT);
+                digitalWrite(EN_PIN, enState ? HIGH : LOW);
+            } else {
+                pinMode(EN_PIN, INPUT);   /* floating — don't drive it */
+            }
+            pinMode(SBY_PIN, OUTPUT); digitalWrite(SBY_PIN, HIGH);
+            pinMode(RST_PIN, OUTPUT); digitalWrite(RST_PIN, HIGH);
+            delay(200);   /* rail settle */
+
+            Serial2.begin(9600, SERIAL_8N1, RX_PIN, TX_PIN);
+            delay(50);
+
+            uint32_t t0 = millis(), count = 0;
+            uint8_t preview[32]; uint32_t pIdx = 0;
+            while (millis() - t0 < 5000) {
+                while (Serial2.available()) {
+                    uint8_t b = (uint8_t)Serial2.read();
+                    count++;
+                    if (pIdx < sizeof(preview)) preview[pIdx++] = b;
+                }
+                delay(2);
+            }
+            Serial2.end();
+
+            Serial.printf("[gpsdiag] %-22s  bytes=%-5lu  ", label, (unsigned long)count);
+            if (count == 0) {
+                Serial.print("(nothing)\n");
+            } else {
+                uint32_t show = pIdx < 16 ? pIdx : 16;
+                for (uint32_t i = 0; i < show; i++) {
+                    if (preview[i] >= 0x20 && preview[i] < 0x7F)
+                        Serial.printf("%c", preview[i]);
+                    else
+                        Serial.printf("\\x%02X", preview[i]);
+                }
+                Serial.println();
+            }
+            return count;
+        };
+
+        Serial.println("[gpsdiag] Phase 1/3: EN floating (is module self-powered?)");
+        uint32_t c1 = probe("EN=float",  false, /*float*/true);
+        Serial.println("[gpsdiag] Phase 2/3: EN=LOW (original active-low theory)");
+        uint32_t c2 = probe("EN=LOW",    false, false);
+        Serial.println("[gpsdiag] Phase 3/3: EN=HIGH (active-high theory)");
+        uint32_t c3 = probe("EN=HIGH",   true,  false);
+
+        Serial.println("[gpsdiag] ---");
+        if (c1 == 0 && c2 == 0 && c3 == 0) {
+            Serial.println("[gpsdiag] RESULT: zero bytes in all three phases.");
+            Serial.println("  Likely causes:");
+            Serial.println("  1. GPS add-on module not physically installed.");
+            Serial.println("  2. GPIO38 is not connected to L76K TX on this board variant.");
+            Serial.println("  3. Module requires a hard reset pulse — unlikely but possible.");
+        } else if (c1 > 0) {
+            Serial.println("[gpsdiag] RESULT: data with EN floating — module is always powered.");
+        } else if (c2 > 0) {
+            Serial.println("[gpsdiag] RESULT: data with EN=LOW — active-LOW polarity confirmed.");
+        } else if (c3 > 0) {
+            Serial.println("[gpsdiag] RESULT: data with EN=HIGH — active-HIGH polarity confirmed.");
+        }
     }
     else if (cmd == "sleep") goToSleep();
     else if (cmd == "reboot") ESP.restart();
