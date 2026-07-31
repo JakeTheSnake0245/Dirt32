@@ -165,7 +165,15 @@ bool configSet(NodeConfig &cfg, const String &key, const String &value) {
     if (key == "gps_enable") { cfg.gps_enable = value.toInt() != 0; return true; }
     if (key == "solar_sense_gpio") { cfg.solar_sense_gpio = (int8_t)value.toInt(); return true; }
     if (key == "gps_fix_timeout_s") { cfg.gps_fix_timeout_s = value.toInt(); return true; }
-    if (key == "fallback_lat") { cfg.fallback_lat_e7 = (int32_t)(value.toFloat() * 1e7f); return true; }
-    if (key == "fallback_lon") { cfg.fallback_lon_e7 = (int32_t)(value.toFloat() * 1e7f); return true; }
+    if (key == "fallback_lat") {
+        float v = value.toFloat();
+        if (v < -90.0f || v > 90.0f) return false;   /* invalid latitude */
+        cfg.fallback_lat_e7 = (int32_t)(v * 1e7f); return true;
+    }
+    if (key == "fallback_lon") {
+        float v = value.toFloat();
+        if (v < -180.0f || v > 180.0f) return false; /* invalid longitude */
+        cfg.fallback_lon_e7 = (int32_t)(v * 1e7f); return true;
+    }
     return false;
 }

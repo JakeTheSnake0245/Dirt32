@@ -114,10 +114,14 @@ function renderNodes(nodes) {
       m.setStyle({ color: COLORS[n.color], fillColor: COLORS[n.color] });
       if (n.color === "red") m._path.classList.add("pulse");
       else m._path.classList.remove("pulse");
+      const posLabel = n.pos_source === "gps" ? "GPS fix"
+                     : n.pos_source === "provisioned" ? "provisioned"
+                     : n.pos_source === "fallback" ? "fallback coords" : "";
       m.bindTooltip(
         `<b>#${n.node_id}${n.name ? " " + n.name : ""}</b><br>` +
         `${n.reasons.join("<br>")}<br>` +
         `batt ${n.battery_mv ?? "?"} mV · rssi ${n.rssi?.toFixed?.(0) ?? "?"}<br>` +
+        `${posLabel ? "pos: " + posLabel + "<br>" : ""}` +
         `seen ${fmtAgo(n.last_seen)}`, { className: "", sticky: true });
     }
     const div = document.createElement("div");

@@ -2,12 +2,11 @@
  * GpsUart — Quectel L76K GNSS driver for the Heltec WiFi LoRa 32 V4
  * plug-in module (NMEA-0183 over UART, 9600 baud).
  *
- * Pin map (from the V4 schematic / Meshtastic heltec_v4 variant):
- *   GPIO38  UART RX  (L76K TX -> CPU)
- *   GPIO39  UART TX  (CPU -> L76K RX)
- *   GPIO34  power enable, ACTIVE LOW
- *   GPIO40  standby: HIGH = force wake, LOW = allow sleep
- *   GPIO42  reset, pull LOW > 100 ms to reset
+ * Pin map (per Heltec's official V4 example, LoRaWanGPSTime_lora_v4.ino):
+ *   GPIO39  UART RX  (L76K TX -> CPU)   — NOTE: header silk names are from
+ *   GPIO38  UART TX  (CPU -> L76K RX)     the module's perspective, not ours
+ *   GPIO34  VGNSS_Ctrl power enable, ACTIVE LOW (LOW = GPS powered)
+ *   GPIO42  reset, held HIGH (pull LOW > 100 ms to reset; never pulsed)
  *
  * The module is fully powered off between fixes — a buried node only takes
  * a fix opportunistically at heartbeat time (spec §5.2); position falls

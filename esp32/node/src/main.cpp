@@ -348,8 +348,9 @@ static void handleCli(String line) {
     else if (cmd == "gpsdiag") {
         /* Targeted UART test only — no pin scanning (broad scanning corrupts
          * the IO matrix and poisons subsequent gpstest runs).
-         * Heltec-documented method only: EN(34)=HIGH, RESET(42)=HIGH,
-         * Serial1 on RX=38/TX=39 at 9600. No standby pin, no reset pulse.
+         * Heltec official V4 example method: EN(34)=LOW (active LOW),
+         * RESET(42)=HIGH, Serial1 on RX=39/TX=38 at 9600.
+         * No standby pin, no reset pulse.
          * Reboots at the end so the UART state is guaranteed clean. */
         const uint8_t EN_PIN = 34, RST_PIN = 42;
 

@@ -77,8 +77,23 @@ def make_handler(db: Db, feed: EventFeed, status_cfg: dict):
                 out = []
                 for n in db.all_nodes():
                     color, reasons = classify(n, status_cfg)
-                    lat_e7 = n.get("hb_lat_e7") or n.get("lat_e7") or 0
-                    lon_e7 = n.get("hb_lon_e7") or n.get("lon_e7") or 0
+                    # Position source: a heartbeat position is only a real GPS
+                    # position when the node reported HF_GPS_FIX; otherwise the
+                    # heartbeat carries the node's own fallback coords. Prefer
+                    # GPS > provisioned > node fallback so a stale/zero fallback
+                    # never overrides surveyed coordinates on the map.
+                    flags = n.get("health_flags") or 0
+                    gps_fix = bool(flags & proto.HF_GPS_FIX)
+                    hb_lat, hb_lon = n.get("hb_lat_e7") or 0, n.get("hb_lon_e7") or 0
+                    prov_lat, prov_lon = n.get("lat_e7") or 0, n.get("lon_e7") or 0
+                    if gps_fix and (hb_lat or hb_lon):
+                        lat_e7, lon_e7, pos_src = hb_lat, hb_lon, "gps"
+                    elif prov_lat or prov_lon:
+                        lat_e7, lon_e7, pos_src = prov_lat, prov_lon, "provisioned"
+                    elif hb_lat or hb_lon:
+                        lat_e7, lon_e7, pos_src = hb_lat, hb_lon, "fallback"
+                    else:
+                        lat_e7, lon_e7, pos_src = 0, 0, None
                     # Only pass a position when we actually have one —
                     # 0,0 is falsy in JS and places the dot in the ocean.
                     has_pos = (lat_e7 != 0 or lon_e7 != 0)
@@ -87,6 +102,8 @@ def make_handler(db: Db, feed: EventFeed, status_cfg: dict):
                         "color": color, "reasons": reasons,
                         "lat": lat_e7 / 1e7 if has_pos else None,
                         "lon": lon_e7 / 1e7 if has_pos else None,
+                        "pos_source": pos_src if has_pos else None,
+                        "gps_fix": gps_fix,
                         "last_seen": n.get("last_seen"),
                         "battery_mv": n.get("battery_mv"),
                         "health_flags": n.get("health_flags"),
