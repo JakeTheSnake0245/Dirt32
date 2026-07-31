@@ -1,0 +1,72 @@
+=== Dirt32 node ===
+node_id=1 net_id=1 fw=1 reset_reason=0
+[boot] radio init...
+[boot] radio OK
+[boot] sensor rail + SPI...
+[boot] sensor front-end init...
+[sensor] front-end init FAILED (taptest still works)
+[boot] detector init...
+Bench mode — CLI active. `help` for commands.
+Press PRG button (or `screen`) for the link-debug display.
+gpsdiag
+unknown command — try `help`
+gpsdiag
+[gpsdiag] EN=HIGH, 9600 baud — scanning RX candidates (5s each)...
+[gpsdiag] RX/TX  bytes  preview
+[gpsdiag] -----  -----  -------
+[gpsdiag]   0/39  1      \xC0
+[gpsdiag]   1/39  0      (nothing)
+[gpsdiag]   2/39  0      (nothing)
+[gpsdiag]   3/39  0      (nothing)
+[gpsdiag]   4/39  0      (nothing)
+[gpsdiag]   5/39  1      \x00
+[gpsdiag]   6/39  0      (nothing)
+[gpsdiag]   7/39  0      (nothing)
+[gpsdiag]   8/39  0      (nothing)
+[gpsdiag]   9/39  0      (nothing)
+[gpsdiag]  10/39  0      (nothing)
+[gpsdiag]  11/39  0      (nothing)
+[gpsdiag]  12/39  0      (nothing)
+[gpsdiag]  13/39  1      \x00
+[gpsdiag]  14/39  1      \x00
+[gpsdiag]  15/39  0      (nothing)
+[gpsdiag]  16/39  0      (nothing)
+[gpsdiag]  17/39  0      (nothing)
+[gpsdiag]  18/39  0      (nothing)
+gps diag
+Disconnected (read failed: [Errno 6] Device not configured)
+Reconnecting to /dev/cu.usbmodem1101 .....       Connected!
+
+=== Dirt32 node ===
+node_id=1 net_id=1 fw=1 reset_reason=1
+[boot] radio init...
+[boot] radio OK
+[boot] sensor rail + SPI...
+[boot] sensor front-end init...
+[sensor] front-end init FAILED (taptest still works)
+[boot] detector init...
+Bench mode — CLI active. `help` for commands.
+Press PRG button (or `screen`) for the link-debug display.
+gpsdiag
+[gpsdiag] EN=HIGH, 9600 baud — scanning RX candidates (5s each)...
+[gpsdiag] RX/TX  bytes  preview
+[gpsdiag] -----  -----  -------
+[gpsdiag]   0/39  1      \xC0
+[gpsdiag]   1/39  0      (nothing)
+[gpsdiag]   2/39  0      (nothing)
+[gpsdiag]   3/39  0      (nothing)
+[gpsdiag]   4/39  0      (nothing)
+[gpsdiag]   5/39  1      \x00
+[gpsdiag]   6/39  0      (nothing)
+[gpsdiag]   7/39  0      (nothing)
+[gpsdiag]   8/39  0      (nothing)
+[gpsdiag]   9/39  0      (nothing)
+[gpsdiag]  10/39  0      (nothing)
+[gpsdiag]  11/39  0      (nothing)
+[gpsdiag]  12/39  0      (nothing)
+[gpsdiag]  13/39  1      \x00
+[gpsdiag]  14/39  1      \x00
+[gpsdiag]  15/39  0      (nothing)
+[gpsdiag]  16/39  0      (nothing)
+[gpsdiag]  17/39  0      (nothing)
+[gpsdiag]  18/39  0      (nothing)
