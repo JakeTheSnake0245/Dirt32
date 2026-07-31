@@ -366,11 +366,13 @@ static void handleCli(String line) {
         /* Full GPIO scan — module uses jumper wires so TX can land anywhere.
          * Skip: 26-32 (SPI flash), 43/44 (USB-CDC console), 34 (EN), 40 (SBY), 42 (RST).
          * Each entry is {rx, tx}.  TX=39 for all except the explicit swap {39,38}. */
+        /* Skip GPIO18 (Heltec V4 LED — crashes chip when reconfigured),
+         * GPIO19/20 (ESP32-S3 USB D-/D+ — hard fault if touched). */
         const uint8_t candidates[][2] = {
             { 0,39},{ 1,39},{ 2,39},{ 3,39},{ 4,39},{ 5,39},{ 6,39},{ 7,39},
             { 8,39},{ 9,39},{10,39},{11,39},{12,39},{13,39},{14,39},{15,39},
-            {16,39},{17,39},{18,39},{19,39},{20,39},{21,39},
-            {35,39},{36,39},{37,39},{38,39},
+            {16,39},{17,39},          /* 18/19/20 skipped */          {21,39},
+            {33,39},{35,39},{36,39},{37,39},{38,39},
             {39,38},   /* RX/TX swapped */
             {41,39},{45,39},{46,39},{47,39},{48,39}
         };
