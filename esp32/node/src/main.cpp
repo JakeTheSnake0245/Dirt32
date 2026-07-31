@@ -263,6 +263,7 @@ static void printHelp() {
         "  gpstest [secs]       stream raw NMEA from the L76K (default 30s)\n"
         "  gpsfix               acquire+print a parsed GPS fix\n"
         "  gpsdiag              low-level GPS wiring/power diagnostic\n"
+        "  gpsraw               bare-minimum factory-style UART dump (no powerOff first)\n"
         "  sleep                enter deep sleep now\n"
         "  reboot");
 }
@@ -405,6 +406,45 @@ static void handleCli(String line) {
         Serial.println("[gpsdiag] Rebooting for clean UART state...");
         delay(500);
         ESP.restart();
+    }
+    else if (cmd == "gpsraw") {
+        /* Factory-exact UART dump — mirrors the Heltec reference code precisely.
+         * Does NOT call powerOff/powerOn; does NOT touch SBY or RST.
+         * If this gets bytes but gpstest doesn't, the issue is in powerOn(). */
+        uint16_t secs = rest.isEmpty() ? 15 : (uint16_t)rest.toInt();
+        if (secs == 0) secs = 15;
+        Serial.printf("[gpsraw] EN=HIGH, delay(500), Serial1 GPIO38/39, %us...\n", secs);
+        pinMode(34, OUTPUT);
+        digitalWrite(34, HIGH);
+        delay(500);
+        Serial1.begin(9600, SERIAL_8N1, 38, 39);
+        uint32_t t0 = millis(), count = 0;
+        uint8_t preview[64]; uint32_t pIdx = 0;
+        while (millis() - t0 < (uint32_t)secs * 1000) {
+            while (Serial1.available()) {
+                uint8_t b = (uint8_t)Serial1.read();
+                count++;
+                if (pIdx < sizeof(preview)) preview[pIdx++] = b;
+            }
+            delay(2);
+        }
+        Serial1.end();
+        Serial.printf("[gpsraw] bytes=%lu  ", (unsigned long)count);
+        if (pIdx > 0) {
+            uint32_t show = pIdx < 48 ? pIdx : 48;
+            for (uint32_t i = 0; i < show; i++) {
+                uint8_t b = preview[i];
+                if (b >= 0x20 && b < 0x7F) Serial.printf("%c", b);
+                else                        Serial.printf("\\x%02X", b);
+            }
+        } else {
+            Serial.print("(nothing)");
+        }
+        Serial.println();
+        if (count == 0) {
+            Serial.println("[gpsraw] Still zero — likely a board variant pin conflict.");
+            Serial.println("  Try: SPI.end() before gpsraw, or use Serial2 instead of Serial1.");
+        }
     }
     else if (cmd == "sleep") goToSleep();
     else if (cmd == "reboot") ESP.restart();
