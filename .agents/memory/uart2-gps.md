@@ -5,7 +5,7 @@ description: GPS UART debugging history; final rule is Serial1 + documented pins
 
 # Heltec V4.3 (HTIT-WB32LAF) GNSS: use the manufacturer-documented method only
 
-**Rule:** GPS init is exactly Heltec's documented V4.3 method: Serial1, RX=GPIO38, TX=GPIO39, 9600 baud, EN=GPIO34 HIGH, RESET=GPIO42 held HIGH (no pulse), no standby pin. Do not add reset pulses, standby-pin handling, or alternate UART peripherals.
+**Rule:** GPS init is exactly Heltec's official V4 example (LoRaWanGPSTime_lora_v4.ino): `digitalWrite(34, LOW)` (VGNSS_Ctrl ACTIVE LOW), then `Serial1.begin(9600, SERIAL_8N1, /*RX*/39, /*TX*/38)` — RX=39, NOT 38; the header names are from the module's perspective. RESET=GPIO42 held HIGH (no pulse), no standby pin, no alternate UART peripherals.
 
 **Why:** A bench loop chased a false "UART1 broken, use Serial2" theory off 1 stray byte (0xC0) — a pin-matrix glitch, not NMEA (9600-baud NMEA is ~400+ bytes/s; require sustained >100 bytes before concluding anything). Community/manufacturer consensus is Serial1 on 38/39 works. The user explicitly demanded the manufacturer method after the experimental detour.
 

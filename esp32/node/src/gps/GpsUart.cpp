@@ -1,11 +1,14 @@
 #include "GpsUart.h"
 #include <sys/time.h>
 
+/* Pin map per Heltec's official V4 example (LoRaWanGPSTime_lora_v4.ino):
+ *   Serial1.begin(9600, SERIAL_8N1, /-RX-/39, /-TX-/38)
+ * i.e. L76K TX -> GPIO39, L76K RX -> GPIO38 — opposite of the header names. */
 #ifndef PIN_GPS_RX
-#define PIN_GPS_RX 38       /* L76K TX -> CPU */
+#define PIN_GPS_RX 39       /* L76K TX -> CPU */
 #endif
 #ifndef PIN_GPS_TX
-#define PIN_GPS_TX 39       /* CPU -> L76K RX */
+#define PIN_GPS_TX 38       /* CPU -> L76K RX */
 #endif
 #ifndef PIN_GPS_EN
 #define PIN_GPS_EN 34       /* VGNSS_Ctrl — ACTIVE LOW (per Meshtastic heltec_v4: GPS_EN_ACTIVE LOW) */

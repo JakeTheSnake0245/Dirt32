@@ -357,12 +357,12 @@ static void handleCli(String line) {
         gps.powerOff();
         delay(200);
 
-        Serial.println("[gpsdiag] EN=LOW (VGNSS_Ctrl active LOW), RESET=HIGH, then 10 s read on GPIO38 (Serial1)...");
+        Serial.println("[gpsdiag] EN=LOW (VGNSS_Ctrl active LOW), RESET=HIGH, then 10 s read on RX=GPIO39 (Serial1)...");
         pinMode(EN_PIN,  OUTPUT); digitalWrite(EN_PIN, LOW);
         pinMode(RST_PIN, OUTPUT); digitalWrite(RST_PIN, HIGH);
         delay(1000);  /* L76K ~1 s to first NMEA */
 
-        Serial1.begin(9600, SERIAL_8N1, /*RX*/38, /*TX*/39);
+        Serial1.begin(9600, SERIAL_8N1, /*RX*/39, /*TX*/38);  /* per Heltec V4 example */
         delay(50);
 
         uint32_t t0 = millis(), count = 0, printable = 0;
