@@ -39,6 +39,9 @@ class Ingest:
             st = db.load_replay(node_id)
             self._replay[node_id] = (proto.ReplayWindow.from_state(st)
                                      if st else proto.ReplayWindow(8))
+        # Cache last emitted status per node so we only push an event when
+        # color or reasons actually change (suppresses per-heartbeat flood).
+        self._last_status: dict[int, tuple[str, tuple]] = {}
 
     # ------------------------------------------------------------------
 
@@ -174,6 +177,13 @@ class Ingest:
         if not node:
             return
         color, reasons = classify(node, self.status_cfg)
+        key = (color, tuple(reasons))
+        # Only emit when color or reasons change — suppresses per-heartbeat
+        # flood when the node's state is stable (e.g. "yellow, low battery"
+        # every 30 s with nothing actually different).
+        if self._last_status.get(node_id) == key:
+            return
+        self._last_status[node_id] = key
         obj = {"node_id": node_id, "color": color, "reasons": reasons,
                "at": time.time()}
         if self.mqtt:
