@@ -53,9 +53,9 @@ def classify(node: dict, cfg: dict | None = None, now: float | None = None):
 
     silence = now - last
     if silence > c["red_silence_s"]:
-        escalate("red", f"silent for {silence/3600:.1f} h")
+        escalate("red", "silence")
     elif silence > c["yellow_silence_s"]:
-        escalate("yellow", f"no heartbeat for {silence/3600:.1f} h")
+        escalate("yellow", "no heartbeat")
 
     flags = node.get("health_flags")
     if flags is not None:
@@ -68,7 +68,7 @@ def classify(node: dict, cfg: dict | None = None, now: float | None = None):
 
     batt = node.get("battery_mv")
     if batt is not None and 0 < batt < c["low_battery_mv"]:
-        escalate("yellow", f"low battery {batt} mV")
+        escalate("yellow", "low battery")
 
     # moved: compare last GPS-fixed heartbeat position with provisioned
     if (flags is not None and flags & proto.HF_GPS_FIX
@@ -76,6 +76,6 @@ def classify(node: dict, cfg: dict | None = None, now: float | None = None):
         d = distance_m(node["lat_e7"], node["lon_e7"],
                        node["hb_lat_e7"], node["hb_lon_e7"])
         if d > c["move_threshold_m"]:
-            escalate("red", f"moved {d:.0f} m from provisioned position")
+            escalate("red", "moved from provisioned position")
 
     return color, reasons or ["healthy"]
