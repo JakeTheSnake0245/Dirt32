@@ -1,0 +1,170 @@
+I dug into this, and I think the problem is not your firmware anymore. The rabbit hole you were sent down is mixing two different Heltec products.
+
+The important part:
+
+Your JTAG header is actually the GNSS header on the V4.3.
+It is not a normal ESP32-S3 JTAG programming header in the way the Replit explanation assumed.
+
+The Heltec V4 schematic maps those pins as dual-function:
+
+Header pin	ESP32-S3 function	GNSS function
+GPIO38	FSPIWP	GNSS_RX
+GPIO39	MTCK	GNSS_TX
+GPIO40	MTDO	GNSS_WAKEUP
+GPIO41	MTDI	GNSS_PPS
+GPIO42	MTMS	GNSS_RST
+
+So your JTAG connector is the correct physical connector for the onboard L76K. The earlier answer saying "move it to the main header" was likely wrong for your board. The V4 documentation explicitly uses GPIO38/GPIO39 for GNSS.
+
+Your gpsdiag result:
+
+[gpsdiag] RESULT: L76K TX appears on GPIO5
+
+is the clue that the scanner is lying.
+
+Why?
+
+Because it is scanning floating pins and detecting random bytes/noise. A GPS UART does not send:
+
+\x00\x00\x00\x00
+
+A working L76K should show:
+
+$GNRMC,...
+$GNGGA,...
+$GPGSV,...
+
+at 9600 baud.
+
+The known-working Heltec L76K setup
+
+This is the configuration used by Heltec/Meshtastic:
+
+GPS RX (ESP32 receives)
+GPIO38
+
+GPS TX (ESP32 transmits)
+GPIO39
+
+GPS EN
+GPIO34
+
+UART:
+
+HardwareSerial GPS(1);
+
+#define GPS_RX 38
+#define GPS_TX 39
+#define GPS_EN 34
+
+void setup() {
+
+  Serial.begin(115200);
+
+  pinMode(GPS_EN, OUTPUT);
+
+  // Heltec V4 L76K power enable
+  digitalWrite(GPS_EN, HIGH);
+
+  delay(500);
+
+  GPS.begin(
+      9600,
+      SERIAL_8N1,
+      GPS_RX,
+      GPS_TX
+  );
+
+  Serial.println("GPS started");
+}
+
+
+void loop() {
+
+  while(GPS.available()) {
+      Serial.write(GPS.read());
+  }
+
+}
+
+Expected output outdoors:
+
+$GNGGA,,,,,0,00,...
+$GNRMC,V,...
+
+Then eventually:
+
+$GNRMC,....,A,...
+
+A = valid fix.
+
+The "known working function" you are probably looking for
+
+The Heltec factory test code.
+
+Heltec ships a GPS display example for their tracker boards using the internal GNSS UART.
+
+The important pieces are basically:
+
+#define GNSS_RX 38
+#define GNSS_TX 39
+#define GNSS_WAKEUP 40
+#define GNSS_RST 42
+#define GNSS_EN 34
+
+
+HardwareSerial GNSS(1);
+
+
+void gpsInit()
+{
+    pinMode(GNSS_EN, OUTPUT);
+
+    digitalWrite(GNSS_EN, HIGH);
+
+    delay(100);
+
+    GNSS.begin(
+        9600,
+        SERIAL_8N1,
+        GNSS_RX,
+        GNSS_TX
+    );
+}
+Your next test (do not change firmware again yet)
+
+Run this:
+
+gpsraw
+
+or whatever your CLI command is that directly dumps UART.
+
+You should see raw NMEA.
+
+If you don't:
+
+Put the board outside.
+Disconnect USB/JTAG programmer if attached.
+Reset.
+Wait 60-120 seconds.
+
+The L76K cold start can take time.
+
+One more thing I noticed
+
+Your boot log:
+
+[sensor] front-end init FAILED (taptest still works)
+
+is unrelated. That is your sensor rail, not GNSS.
+
+The only GPS issue remaining is likely one of:
+
+EN polarity
+Try HIGH first (your logs already did this)
+If no NMEA, try LOW
+The Replit gpsdiag scanner is corrupting the diagnosis
+It should not scan all pins.
+It should only test the known UART.
+Wrong connector orientation
+The L76K JST cable can be inserted backwards on some aftermarket boards.
