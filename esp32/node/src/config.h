@@ -54,7 +54,7 @@ struct NodeConfig {
        ON_SOLAR health flag. Charging itself is pure hardware — the V4's
        charge IC needs no firmware involvement. */
     int8_t   solar_sense_gpio = -1;
-    uint16_t gps_fix_timeout_s = 60;
+    uint16_t gps_fix_timeout_s = 150;  /* L76K cold-start up to ~2 min */
 
     /* Fallback position (used when no GPS fix; provisioning record §11) */
     int32_t  fallback_lat_e7 = 0;

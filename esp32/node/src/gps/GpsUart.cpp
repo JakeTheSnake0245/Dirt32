@@ -138,19 +138,40 @@ bool GpsUart::feedChar(char c, GpsFixResult &out) {
 
 GpsFixResult GpsUart::acquire(uint16_t timeout_s) {
     GpsFixResult fix;
-    uint32_t deadline = millis() + (uint32_t)timeout_s * 1000;
+    uint32_t deadline  = millis() + (uint32_t)timeout_s * 1000;
+    uint32_t lastLog   = millis();
+    uint32_t sentences = 0;   /* any NMEA sentence received, valid or not */
+
     while ((int32_t)(deadline - millis()) > 0) {
         while (gpsSerial.available()) {
-            if (feedChar((char)gpsSerial.read(), fix)) {
-                if (fix.unix_time > 0) {      /* sync system clock to UTC */
+            char c = (char)gpsSerial.read();
+            if (c == '\n') sentences++;
+            if (feedChar(c, fix)) {
+                if (fix.unix_time > 0) {
                     struct timeval tv = { (time_t)fix.unix_time, 0 };
                     settimeofday(&tv, NULL);
                 }
+                Serial.printf("[gps] fix acquired in %lus — sats=%u\n",
+                              (unsigned long)((millis() - (deadline - (uint32_t)timeout_s * 1000)) / 1000),
+                              fix.sats);
                 return fix;
             }
         }
+        /* Progress heartbeat every 10 s so the user can see NMEA is flowing. */
+        if (millis() - lastLog >= 10000) {
+            uint32_t elapsed = (millis() - (deadline - (uint32_t)timeout_s * 1000)) / 1000;
+            if (sentences > 0)
+                Serial.printf("[gps] hunting... %lus elapsed, %lu sentences rx (no fix yet)\n",
+                              (unsigned long)elapsed, (unsigned long)sentences);
+            else
+                Serial.printf("[gps] %lus elapsed — NO NMEA received (wiring/power issue?)\n",
+                              (unsigned long)elapsed);
+            lastLog = millis();
+        }
         delay(5);
     }
+    Serial.printf("[gps] timeout after %us — %lu sentences rx, no fix\n",
+                  timeout_s, (unsigned long)sentences);
     return fix;   /* invalid — caller falls back to provisioned position */
 }
 
