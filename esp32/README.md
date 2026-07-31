@@ -122,12 +122,13 @@ floor, firmware version, and reset count.
 
 ### GPS (L76K GNSS plug-in module)
 
-The firmware drives the Heltec L76K module on the V4's GNSS port directly
-(UART GPIO38/39, power-enable GPIO34 active-low, standby GPIO40, reset
-GPIO42 — matching the V4 schematic). Behavior:
+The firmware drives the Heltec L76K module on the V4's GNSS port directly,
+matching Heltec's official V4 GPS example: UART RX = GPIO39, TX = GPIO38
+(the silk names are from the module's perspective), power-enable GPIO34
+**active-low**, reset GPIO42 held high. Behavior:
 
 - At each heartbeat (if `gps_enable 1`), the module is powered, given up to
-  `gps_fix_timeout_s` (default 60 s) to produce a fix, then **fully powered
+  `gps_fix_timeout_s` (default 150 s) to produce a fix, then **fully powered
   off** — it draws nothing between beats.
 - On a fix, the heartbeat carries real coordinates and the node's clock is
   synced to UTC, so alert timestamps are real time from then on.
@@ -144,7 +145,7 @@ GPIO42 — matching the V4 schematic). Behavior:
 |---------------------|-----|-----|-----------------------|-----|
 | `gps_enable`        | 0   | 1   | **1** (0 once planted)| Useful during install/survey; a buried node's position never changes, so turn it off and rely on the fallback to save battery |
 | `solar_sense_gpio`  | -1  | 48  | **-1** (off)          | Optional. Charging is pure hardware — the V4's charge IC charges the battery whenever 5 V is present (USB or solar), nothing to enable. Set this to a free GPIO (avoid 2/5/7/46 — RF front-end) wired to the panel rail through a ~100k/100k divider, and heartbeats will report the ON_SOLAR flag so the gateway can see the panel producing |
-| `gps_fix_timeout_s` | 10  | 300 | **60**                | L76K cold start is 30-60 s with sky view; longer just drains the battery when buried |
+| `gps_fix_timeout_s` | 10  | 300 | **150**                | L76K cold start is 30-60 s with sky view; longer just drains the battery when buried |
 
 ### Detection / front-end parameters (sender-only, never affect compatibility)
 
@@ -200,6 +201,44 @@ SEQ 129  RADIO OK
 - **Pin map:** LoRa + sensor pins in `platformio.ini` — check against your
   V4 silk/schematic and harness before first power-up.
 
+## Pinout (Heltec WiFi LoRa 32 V4.3, ESP32-S3)
+
+Master pin map — matches `platformio.ini` build flags (the source of truth).
+
+| Function | GPIO | Dir | Notes |
+|----------|------|-----|-------|
+| **Shared SPI bus** (LoRa + both sensors) | | | |
+| SPI SCK  | 9  | out | `SPI.begin(9, 11, 10, -1)` — explicit pins are CRITICAL (see hazards) |
+| SPI MISO | 11 | in  | |
+| SPI MOSI | 10 | out | |
+| **LoRa SX1262** (on-board) | | | |
+| NSS (CS) | 8  | out | |
+| DIO1     | 14 | in  | TX-done / RX interrupt |
+| RST      | 12 | out | |
+| BUSY     | 13 | in  | |
+| **ADXL355 digital accelerometer** (option A) | | | |
+| CS       | 47 | out | dedicated chip-select |
+| INT1     | 6  | in  | motion-wake (RTC-capable → wakes from deep sleep) |
+| **ADS1220 24-bit ADC / SM-24 geophone** (option B, analog front-end) | | | |
+| CS       | 48 | out | dedicated chip-select |
+| DRDY     | 4  | in  | data-ready, polled |
+| **L76K GNSS module** | | | |
+| UART RX  | 39 | in  | L76K TX → CPU (per Heltec's official V4 example) |
+| UART TX  | 38 | out | CPU → L76K RX |
+| EN (VGNSS_Ctrl) | 34 | out | **ACTIVE LOW** — LOW powers the GPS |
+| RESET    | 42 | out | held HIGH; LOW >100 ms resets |
+| **Power / misc** | | | |
+| Ve sensor rail | 36 | out | ACTIVE LOW on V4 — switched 3.3 V for the sensors |
+| VBAT ADC | 1  | in  | battery divider (`analogReadMilliVolts`) |
+| PRG/USER button | 0 | in | active-low; debug screen |
+| Solar sense | user-set | in | optional, `set solar_sense_gpio <n>` through ~100k/100k divider |
+
+> ⚠️ **Off-limits GPIOs:**
+> - **2, 5, 7, 46** — used internally by the V4's RF power amplifier.
+> - **26–32** — wired to flash/PSRAM on the ESP32-S3; touching them
+>   crashes the chip (TG1WDT boot loop).
+> - **35, 37** — PSRAM on the 8 MB-PSRAM S3 modules; avoid.
+
 ## Wiring the seismic sensors
 
 Both drivers are built and selectable at runtime — no reflash needed:
@@ -207,9 +246,6 @@ Both drivers are built and selectable at runtime — no reflash needed:
 and `selftest` to verify. Both sensors share the SPI bus with the LoRa
 radio (SCK = GPIO9, MISO = GPIO11, MOSI = GPIO10); each device gets its own
 chip-select.
-
-> ⚠️ GPIO 2, 5, 7, and 46 are used **internally** by the V4's RF power
-> amplifier. Never connect anything to them.
 
 ### Option A — ADXL355 (digital, SPI) — recommended first
 
@@ -220,10 +256,13 @@ chip-select.
 | SCLK        | GPIO9  | shared SPI clock |
 | MOSI (SDA)  | GPIO10 | shared |
 | MISO (SDO)  | GPIO11 | shared |
-| CS          | GPIO26 | dedicated chip-select |
+| CS          | GPIO47 | dedicated chip-select |
 | INT1        | GPIO6  | motion-wake interrupt (RTC-capable → wakes from deep sleep) |
 
 ### Option B — SM-24 geophone + ADS1220 (analog front-end)
+
+The SM-24 is an analog sensor — it never touches an ESP32 pin directly.
+Its coil feeds the ADS1220's differential inputs; the ADS1220 talks SPI.
 
 | ADS1220 pin | V4 pin | Notes |
 |-------------|--------|-------|
@@ -232,7 +271,7 @@ chip-select.
 | SCLK        | GPIO9  | shared SPI clock |
 | DIN (MOSI)  | GPIO10 | shared |
 | DOUT (MISO) | GPIO11 | shared |
-| CS          | GPIO33 | dedicated chip-select |
+| CS          | GPIO48 | dedicated chip-select |
 | DRDY        | GPIO4  | data-ready, polled |
 | AIN0 / AIN1 | SM-24 coil ± | differential input, PGA gain 32 |
 
