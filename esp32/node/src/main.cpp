@@ -396,13 +396,14 @@ static void handleCli(String line) {
             return count;
         };
 
-        /* Phase 1: confirm module is always powered with EN floating */
-        Serial.println("[gpsdiag] Phase 1/3: EN floating (module always powered?)");
-        uint32_t c1 = probe("EN=float",  false, /*float*/true);
-        Serial.println("[gpsdiag] Phase 2/3: EN=LOW");
-        uint32_t c2 = probe("EN=LOW",    false, false);
-        Serial.println("[gpsdiag] Phase 3/3: EN=HIGH");
-        uint32_t c3 = probe("EN=HIGH",   true,  false);
+        /* Test EN=HIGH first — LOW cuts power and recovery takes >200 ms,
+         * so always probe the expected-working state before the kill state. */
+        Serial.println("[gpsdiag] Phase 1/3: EN=HIGH (Heltec V4 expected: HIGH=on)");
+        uint32_t c1 = probe("EN=HIGH",  true,  false);
+        Serial.println("[gpsdiag] Phase 2/3: EN floating");
+        uint32_t c2 = probe("EN=float", false, /*float*/true);
+        Serial.println("[gpsdiag] Phase 3/3: EN=LOW (should kill power)");
+        uint32_t c3 = probe("EN=LOW",   false, false);
 
         Serial.println("[gpsdiag] ---");
         if (c1 == 0 && c2 == 0 && c3 == 0) {
@@ -410,21 +411,21 @@ static void handleCli(String line) {
             return;
         }
         if (c1 > 0)
-            Serial.println("[gpsdiag] RESULT: module always powered (EN pin has no effect or is unconnected).");
+            Serial.println("[gpsdiag] RESULT: EN=HIGH powers module (correct for Heltec V4).");
         else if (c2 > 0)
-            Serial.println("[gpsdiag] RESULT: EN=LOW powers module.");
+            Serial.println("[gpsdiag] RESULT: data only when EN floats — EN may be pulled HIGH externally.");
         else
-            Serial.println("[gpsdiag] RESULT: EN=HIGH powers module.");
+            Serial.println("[gpsdiag] RESULT: EN=LOW powers module (unexpected — double-check wiring).");
 
-        /* Phase 2: baud rate scan (EN floating, 10 s each) — find the one that
+        /* Phase 2: baud rate scan (EN=HIGH, 10 s each) — find the one that
          * gives printable ASCII so we know what to use in GpsUart */
-        Serial.println("[gpsdiag] Baud scan (EN float, 10s each) — looking for printable NMEA...");
+        Serial.println("[gpsdiag] Baud scan (EN=HIGH, 10s each) — looking for printable NMEA...");
         const uint32_t bauds[] = { 4800, 9600, 19200, 38400, 57600, 115200 };
         for (uint32_t b : bauds) {
-            pinMode(EN_PIN, INPUT);
+            pinMode(EN_PIN,  OUTPUT); digitalWrite(EN_PIN, HIGH);
             pinMode(SBY_PIN, OUTPUT); digitalWrite(SBY_PIN, HIGH);
             pinMode(RST_PIN, OUTPUT); digitalWrite(RST_PIN, HIGH);
-            delay(100);
+            delay(1000);   /* L76K needs ~1 s after power-on before first NMEA */
             Serial2.begin(b, SERIAL_8N1, RX_PIN, TX_PIN);
             delay(50);
             uint32_t t0 = millis(), total = 0, printable = 0;

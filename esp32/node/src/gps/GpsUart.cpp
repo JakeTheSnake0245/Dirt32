@@ -23,17 +23,17 @@
 static HardwareSerial &gpsSerial = Serial1;
 
 void GpsUart::powerOn() {
-    /* EN pin (GPIO34) is NOT driven — diagnostics show the L76K is always
-     * powered from VCC; driving EN either way suppresses UART output, so
-     * we leave it as INPUT (floating).  Only standby and reset are needed. */
-    pinMode(PIN_GPS_EN, INPUT);           /* hands off — always powered */
+    /* GPIO34 HIGH = VGNSS_Ctrl rail enabled (confirmed by Heltec V4 schematic).
+     * LOW = module dead, floating = undefined (do not leave floating).
+     * L76K needs ~1 s after power-on before first NMEA sentence appears. */
+    pinMode(PIN_GPS_EN, OUTPUT);
     pinMode(PIN_GPS_STANDBY, OUTPUT);
     pinMode(PIN_GPS_RESET, OUTPUT);
+    digitalWrite(PIN_GPS_EN, HIGH);       /* enable VGNSS power rail */
     digitalWrite(PIN_GPS_STANDBY, HIGH);  /* force wake */
     digitalWrite(PIN_GPS_RESET, HIGH);    /* not in reset */
-    delay(200);                           /* rail settle (extra margin) */
+    delay(1000);                          /* L76K cold-start: ~1 s to first NMEA */
     gpsSerial.begin(GPS_BAUD, SERIAL_8N1, PIN_GPS_RX, PIN_GPS_TX);
-    delay(50);                            /* UART settle */
     _len = 0;
     _partial = GpsFixResult{};
 }
@@ -41,7 +41,7 @@ void GpsUart::powerOn() {
 void GpsUart::powerOff() {
     gpsSerial.end();
     digitalWrite(PIN_GPS_STANDBY, LOW);   /* allow sleep */
-    /* EN left as INPUT — module stays on VCC, standby controls quiescent draw */
+    digitalWrite(PIN_GPS_EN, LOW);        /* cut VGNSS power rail */
 }
 
 bool GpsUart::checksumOk(const char *line) {
