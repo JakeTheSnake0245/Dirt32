@@ -63,8 +63,11 @@ void configLoad(NodeConfig &cfg) {
     cfg.gps_enable = doc["gps_enable"] | cfg.gps_enable;
     cfg.solar_sense_gpio = doc["solar_sense_gpio"] | cfg.solar_sense_gpio;
     cfg.gps_fix_timeout_s = doc["gps_fix_timeout_s"] | cfg.gps_fix_timeout_s;
-    cfg.fallback_lat_e7 = doc["fallback_lat_e7"] | cfg.fallback_lat_e7;
-    cfg.fallback_lon_e7 = doc["fallback_lon_e7"] | cfg.fallback_lon_e7;
+    // Stored and displayed as decimal degrees; converted to e7 on load.
+    if (doc["fallback_lat"].is<float>() || doc["fallback_lat"].is<int>())
+        cfg.fallback_lat_e7 = (int32_t)(doc["fallback_lat"].as<float>() * 1e7f);
+    if (doc["fallback_lon"].is<float>() || doc["fallback_lon"].is<int>())
+        cfg.fallback_lon_e7 = (int32_t)(doc["fallback_lon"].as<float>() * 1e7f);
 }
 
 static void toJson(const NodeConfig &cfg, JsonDocument &doc, bool includePsk) {
@@ -105,8 +108,8 @@ static void toJson(const NodeConfig &cfg, JsonDocument &doc, bool includePsk) {
     doc["gps_enable"] = cfg.gps_enable;
     doc["solar_sense_gpio"] = cfg.solar_sense_gpio;
     doc["gps_fix_timeout_s"] = cfg.gps_fix_timeout_s;
-    doc["fallback_lat_e7"] = cfg.fallback_lat_e7;
-    doc["fallback_lon_e7"] = cfg.fallback_lon_e7;
+    doc["fallback_lat"] = cfg.fallback_lat_e7 / 1e7f;
+    doc["fallback_lon"] = cfg.fallback_lon_e7 / 1e7f;
 }
 
 bool configSave(const NodeConfig &cfg) {
@@ -162,7 +165,7 @@ bool configSet(NodeConfig &cfg, const String &key, const String &value) {
     if (key == "gps_enable") { cfg.gps_enable = value.toInt() != 0; return true; }
     if (key == "solar_sense_gpio") { cfg.solar_sense_gpio = (int8_t)value.toInt(); return true; }
     if (key == "gps_fix_timeout_s") { cfg.gps_fix_timeout_s = value.toInt(); return true; }
-    if (key == "fallback_lat_e7") { cfg.fallback_lat_e7 = value.toInt(); return true; }
-    if (key == "fallback_lon_e7") { cfg.fallback_lon_e7 = value.toInt(); return true; }
+    if (key == "fallback_lat") { cfg.fallback_lat_e7 = (int32_t)(value.toFloat() * 1e7f); return true; }
+    if (key == "fallback_lon") { cfg.fallback_lon_e7 = (int32_t)(value.toFloat() * 1e7f); return true; }
     return false;
 }
