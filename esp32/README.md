@@ -203,7 +203,56 @@ SEQ 129  RADIO OK
 
 ## Pinout (Heltec WiFi LoRa 32 V4.3, ESP32-S3)
 
-Master pin map — matches `platformio.ini` build flags (the source of truth).
+### Board wiring diagram
+
+```
+                       Heltec WiFi LoRa 32 V4.3 (ESP32-S3)
+                      ┌─────────────────────────────────┐
+                      │        [OLED]      [SX1262]     │ SX1262 is on-board:
+                      │                    NSS   GPIO8  │ nothing to wire for
+   PRG/USER button ───┤ GPIO0              DIO1  GPIO14 │ the radio.
+   (debug screen)     │                    RST   GPIO12 │
+                      │                    BUSY  GPIO13 │
+   VBAT divider ──────┤ GPIO1                           │
+                      │                                 │
+                      │  SHARED SPI BUS      GNSS PORT  │      ┌───────────┐
+        ┌── SCK ──────┤ GPIO9      GPIO39 (RX ◄─ L76K TX)──────┤  L76K     │
+        ├── MOSI ─────┤ GPIO10     GPIO38 (TX ─► L76K RX)──────┤  GNSS     │
+        ├── MISO ─────┤ GPIO11     GPIO34 (EN, ACTIVE LOW)─────┤  module   │
+        │             │            GPIO42 (RESET, keep HIGH)───┤ (plug-in) │
+        │             │                                 │      └───────────┘
+        │  ┌── CS ────┤ GPIO47   GPIO36 ── Ve rail ──┐  │
+        │  ├── INT1 ──┤ GPIO6    (switched 3.3 V,    │  │
+        │  │          │           ACTIVE LOW)        │  │
+        │  │  ┌─ CS ──┤ GPIO48                       │  │
+        │  │  ├─ DRDY─┤ GPIO4                        │  │
+        │  │  │       └──────────────────────────────┼──┘
+        │  │  │                                      │
+        ▼  ▼  │                                      │
+   ┌──────────┴──┐        DIGITAL SENSOR (option A)  │
+   │  ADXL355    │ VDD+VDDIO ◄── Ve ─────────────────┤
+   │  (SPI accel)│ GND ── GND                        │
+   └─────────────┘                                   │
+        │  │  │                                      │
+        ▼  ▼  ▼           ANALOG SENSOR (option B)   │
+   ┌─────────────┐ DVDD/AVDD ◄── Ve ─────────────────┘
+   │  ADS1220    │ GND ── GND
+   │  24-bit ADC │ AIN0 ◄──┐
+   │             │ AIN1 ◄──┤  differential pair (PGA ×32)
+   └─────────────┘         │
+                     ┌─────┴─────┐
+                     │   SM-24   │  analog geophone — connects ONLY to the
+                     │  geophone │  ADS1220, never to an ESP32 pin
+                     └───────────┘  (~1 kΩ damping resistor across coil)
+```
+
+Wire ONE sensor option (A or B) — both share SCK=9 / MOSI=10 / MISO=11 with
+the on-board radio; only CS/INT/DRDY differ. Select with
+`set front_end adxl355|geophone`.
+
+### Master pin table
+
+Matches `platformio.ini` build flags (the source of truth).
 
 | Function | GPIO | Dir | Notes |
 |----------|------|-----|-------|

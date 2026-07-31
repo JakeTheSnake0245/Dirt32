@@ -35,6 +35,9 @@ battery.
 | ADXL355 accelerometer *or* SM-24 geophone + ADS1220 | seismic front-end |
 | Heltec L76K GNSS module | position + UTC time (optional) |
 
+Full board pinout — wiring diagram + master pin table (sensors, GPS, SPI
+bus, off-limits GPIOs) — is in [`esp32/README.md`](esp32/README.md#pinout-heltec-wifi-lora-32-v43-esp32-s3).
+
 ## Repository layout
 
 ```
