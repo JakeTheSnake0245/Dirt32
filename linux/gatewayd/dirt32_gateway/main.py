@@ -100,9 +100,12 @@ def main():
     print(f"[web] GUI on http://{cfg['web']['host']}:{cfg['web']['port']}")
 
     # periodic: status refresh (silence-based transitions) + MQTT keepalive
+    # Runs hourly — status events only fire on actual color/reason changes
+    # (see Ingest.publish_status), so the interval just sets the worst-case
+    # detection lag for a node going silent.
     try:
         while True:
-            time.sleep(30)
+            time.sleep(3600)
             mqtt.ping_if_due()
             ingest.publish_all_status()
     except KeyboardInterrupt:
