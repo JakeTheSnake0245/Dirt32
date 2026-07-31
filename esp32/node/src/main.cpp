@@ -344,30 +344,33 @@ static void handleCli(String line) {
         if (!f.valid) Serial.println("[gps] NO FIX (needs sky view; cold start can take 30-60s)");
     }
     else if (cmd == "gpsdiag") {
-        /* Low-level wiring diagnostic — bypasses GpsUart entirely.
-           Tries three EN states × 5 s each and reports raw byte counts + hex.
-           Pins are the same as GpsUart.h; any mismatch shows up here. */
-        const uint8_t RX_PIN = 38, TX_PIN = 39, EN_PIN = 34,
-                      SBY_PIN = 40, RST_PIN = 42;
-        Serial.printf("[gpsdiag] RX=GPIO%u  TX=GPIO%u  EN=GPIO%u\n",
-                      RX_PIN, TX_PIN, EN_PIN);
+        /* GPIO pin scan: EN=HIGH held throughout, 9600 baud, 5 s per candidate.
+         * Closes GpsUart's Serial1 first to avoid IO-matrix conflict, then
+         * tries every plausible RX GPIO so we can find which pin L76K TX
+         * is actually wired to on this board revision.
+         * Restores GPS state on exit. */
+        const uint8_t EN_PIN = 34, SBY_PIN = 40, RST_PIN = 42;
 
-        /* Helper lambda: open Serial1, drain for ms_window, close, return count */
-        auto probe = [&](const char *label, bool enState, bool enFloat) -> uint32_t {
-            /* Set EN + standby + reset */
-            if (!enFloat) {
-                pinMode(EN_PIN,  OUTPUT);
-                digitalWrite(EN_PIN, enState ? HIGH : LOW);
-            } else {
-                pinMode(EN_PIN, INPUT);   /* floating — don't drive it */
-            }
-            pinMode(SBY_PIN, OUTPUT); digitalWrite(SBY_PIN, HIGH);
-            pinMode(RST_PIN, OUTPUT); digitalWrite(RST_PIN, HIGH);
-            delay(200);   /* rail settle */
+        /* Power GPS on and hold it — do NOT toggle EN during the scan. */
+        gps.powerOff();   /* closes Serial1, drives EN LOW briefly */
+        delay(100);
+        pinMode(EN_PIN,  OUTPUT); digitalWrite(EN_PIN, HIGH);
+        pinMode(SBY_PIN, OUTPUT); digitalWrite(SBY_PIN, HIGH);
+        pinMode(RST_PIN, OUTPUT); digitalWrite(RST_PIN, HIGH);
+        delay(1500);   /* 1.5 s: L76K needs ~1 s before first NMEA sentence */
 
-            Serial2.begin(9600, SERIAL_8N1, RX_PIN, TX_PIN);
-            delay(50);
+        Serial.println("[gpsdiag] EN=HIGH, 9600 baud — scanning RX candidates (5s each)...");
+        Serial.println("[gpsdiag] GPIO  bytes  preview");
+        Serial.println("[gpsdiag] ----  -----  -------");
 
+        /* Candidate RX pins: schematic GPIO38 plus neighbours and known
+         * alternate mappings seen on V4 board variants and Meshtastic builds. */
+        const uint8_t candidates[] = { 35, 36, 37, 38, 39, 45, 46, 47, 48 };
+        uint8_t winner = 0;
+
+        for (uint8_t rxp : candidates) {
+            Serial2.begin(9600, SERIAL_8N1, rxp, /*TX unused*/39);
+            delay(30);
             uint32_t t0 = millis(), count = 0;
             uint8_t preview[32]; uint32_t pIdx = 0;
             while (millis() - t0 < 5000) {
@@ -379,80 +382,30 @@ static void handleCli(String line) {
                 delay(2);
             }
             Serial2.end();
-
-            Serial.printf("[gpsdiag] %-22s  bytes=%-5lu  ", label, (unsigned long)count);
+            Serial.printf("[gpsdiag]  %2u    %-5lu  ", rxp, (unsigned long)count);
             if (count == 0) {
-                Serial.print("(nothing)\n");
+                Serial.print("(nothing)");
             } else {
-                uint32_t show = pIdx < 16 ? pIdx : 16;
+                uint32_t show = pIdx < 20 ? pIdx : 20;
                 for (uint32_t i = 0; i < show; i++) {
-                    if (preview[i] >= 0x20 && preview[i] < 0x7F)
-                        Serial.printf("%c", preview[i]);
-                    else
-                        Serial.printf("\\x%02X", preview[i]);
+                    uint8_t b = preview[i];
+                    if (b >= 0x20 && b < 0x7F) Serial.printf("%c", b);
+                    else                        Serial.printf("\\x%02X", b);
                 }
-                Serial.println();
-            }
-            return count;
-        };
-
-        /* Test EN=HIGH first — LOW cuts power and recovery takes >200 ms,
-         * so always probe the expected-working state before the kill state. */
-        Serial.println("[gpsdiag] Phase 1/3: EN=HIGH (Heltec V4 expected: HIGH=on)");
-        uint32_t c1 = probe("EN=HIGH",  true,  false);
-        Serial.println("[gpsdiag] Phase 2/3: EN floating");
-        uint32_t c2 = probe("EN=float", false, /*float*/true);
-        Serial.println("[gpsdiag] Phase 3/3: EN=LOW (should kill power)");
-        uint32_t c3 = probe("EN=LOW",   false, false);
-
-        Serial.println("[gpsdiag] ---");
-        if (c1 == 0 && c2 == 0 && c3 == 0) {
-            Serial.println("[gpsdiag] RESULT: zero bytes in all phases — GPS module not present or GPIO38 unwired.");
-            return;
-        }
-        if (c1 > 0)
-            Serial.println("[gpsdiag] RESULT: EN=HIGH powers module (correct for Heltec V4).");
-        else if (c2 > 0)
-            Serial.println("[gpsdiag] RESULT: data only when EN floats — EN may be pulled HIGH externally.");
-        else
-            Serial.println("[gpsdiag] RESULT: EN=LOW powers module (unexpected — double-check wiring).");
-
-        /* Phase 2: baud rate scan (EN=HIGH, 10 s each) — find the one that
-         * gives printable ASCII so we know what to use in GpsUart */
-        Serial.println("[gpsdiag] Baud scan (EN=HIGH, 10s each) — looking for printable NMEA...");
-        const uint32_t bauds[] = { 4800, 9600, 19200, 38400, 57600, 115200 };
-        for (uint32_t b : bauds) {
-            pinMode(EN_PIN,  OUTPUT); digitalWrite(EN_PIN, HIGH);
-            pinMode(SBY_PIN, OUTPUT); digitalWrite(SBY_PIN, HIGH);
-            pinMode(RST_PIN, OUTPUT); digitalWrite(RST_PIN, HIGH);
-            delay(1000);   /* L76K needs ~1 s after power-on before first NMEA */
-            Serial2.begin(b, SERIAL_8N1, RX_PIN, TX_PIN);
-            delay(50);
-            uint32_t t0 = millis(), total = 0, printable = 0;
-            uint8_t preview[48]; uint32_t pIdx = 0;
-            while (millis() - t0 < 10000) {
-                while (Serial2.available()) {
-                    uint8_t byt = (uint8_t)Serial2.read();
-                    total++;
-                    if (byt >= 0x20 && byt < 0x7F) printable++;
-                    if (pIdx < sizeof(preview)) preview[pIdx++] = byt;
-                }
-                delay(2);
-            }
-            Serial2.end();
-            Serial.printf("[gpsdiag] %6lu baud: bytes=%-5lu  printable=%lu%%  ",
-                          b, (unsigned long)total,
-                          total ? (unsigned long)(printable * 100 / total) : 0UL);
-            uint32_t show = pIdx < 24 ? pIdx : 24;
-            for (uint32_t i = 0; i < show; i++) {
-                if (preview[i] >= 0x20 && preview[i] < 0x7F)
-                    Serial.printf("%c", preview[i]);
-                else
-                    Serial.printf("\\x%02X", preview[i]);
+                if (!winner) winner = rxp;
             }
             Serial.println();
         }
-        Serial.println("[gpsdiag] done. The baud rate with ~100% printable and '$' in preview is correct.");
+
+        Serial.println("[gpsdiag] ---");
+        if (winner)
+            Serial.printf("[gpsdiag] RESULT: L76K TX appears on GPIO%u — update PIN_GPS_RX if not 38.\n", winner);
+        else
+            Serial.println("[gpsdiag] RESULT: no NMEA on any candidate pin.\n"
+                           "  Check: module fully seated, connector not bent, EN rail voltage ~3.3 V on GPIO34.");
+
+        /* Restore: re-open GpsUart so normal operation continues. */
+        gps.powerOn();
     }
     else if (cmd == "sleep") goToSleep();
     else if (cmd == "reboot") ESP.restart();
