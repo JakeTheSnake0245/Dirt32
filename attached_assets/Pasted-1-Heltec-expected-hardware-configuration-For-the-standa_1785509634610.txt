@@ -1,0 +1,191 @@
+1. Heltec expected hardware configuration
+
+For the standard WiFi LoRa 32 V4, Heltec maps the GNSS interface as:
+
+Function	GPIO
+GNSS RX (ESP32 receives)	GPIO38
+GNSS TX (ESP32 transmits)	GPIO39
+GNSS Power Control	GPIO34
+GNSS Reset	GPIO42
+
+The important detail is that GPIO34 is the GNSS power enable line. Heltec documents the V4 GNSS control pins separately from the UART pins.
+
+Your test:
+
+EN HIGH powers module
+EN LOW kills power
+
+matches Heltec's expected behavior.
+
+So your power-enable side looks correct.
+
+2. The most common community fix: don't manually override GPS pins
+
+A surprising number of Meshtastic users report that manually entering:
+
+GPS RX = 38
+GPS TX = 39
+GPS EN = 34
+
+causes problems because the firmware already has the correct board defaults.
+
+The community recommendation is often:
+
+GPS RX GPIO = 0/unset/default
+GPS TX GPIO = 0/unset/default
+GPS EN GPIO = 0/unset/default
+
+and let the Heltec V4 variant define them.
+
+This is specifically because the Heltec V4 board definition already knows:
+
+RX 38
+TX 39
+EN 34
+3. The second most common fix: connector seating/orientation
+
+Multiple Heltec V4 + L76K users found that the issue was not software.
+
+The fixes were:
+
+unplug/reseat the GNSS connector
+verify the plug is fully inserted
+verify it is not upside down
+
+One user reported the module worked immediately after using the correct firmware and properly seating the connector.
+
+Your symptoms actually match this category more than "no satellite fix":
+
+You have:
+
+EN works
+No UART
+No NMEA
+
+That is exactly what happens if:
+
+GPS power is reaching the module
+but TX/RX pins are not connected
+4. Baud rate
+
+Heltec's L76K module is expected to use:
+
+9600 baud
+8 data bits
+No parity
+1 stop bit
+
+Your baud scan already ruled out a baud mismatch.
+
+A wrong baud would normally produce garbage bytes, not:
+
+0 bytes
+0 printable
+5. Community fix: wait outdoors only applies AFTER NMEA works
+
+A lot of posts say:
+
+"Put it outside."
+
+That is correct only if you are receiving NMEA sentences.
+
+Example:
+
+Working GPS but no fix:
+
+$GNGGA,,,,,,0,00
+$GNRMC,V,,,,,
+
+No fix yet.
+
+Your case:
+
+nothing
+nothing
+nothing
+
+means the receiver is not talking.
+
+Outdoor sky visibility will not fix that.
+
+6. Your diagnostic result compared to expected
+
+Expected:
+
+EN HIGH
+
+$GNRMC,...
+$GNVTG,...
+$GNGGA,...
+$GPGSV,...
+
+Your result:
+
+EN HIGH
+bytes=0
+
+Therefore:
+
+The fault tree is:
+                 No NMEA
+                    |
+        +-----------+-----------+
+        |                       |
+    GPS not connected       UART wrong
+        |                       |
+    Reseat connector       Swap RX/TX
+    Check module          Verify pins
+What I would do next (in order)
+Step 1 — Swap UART pins
+
+Run:
+
+RX=39
+TX=38
+EN=34
+
+for the raw dump.
+
+This takes 30 seconds.
+
+Step 2 — Physically reseat L76K
+
+Remove it.
+
+Inspect:
+
+connector pins
+orientation
+seating pressure
+
+Reinstall.
+
+Step 3 — Measure GPS power
+
+With:
+
+GPIO34 HIGH
+
+measure the L76K VCC.
+
+You should see approximately:
+
+3.3V
+Step 4 — Add reset pulse
+
+Some L76K boards benefit from reset:
+
+Heltec maps:
+
+GNSS_RST = GPIO42
+
+Try:
+
+pinMode(42, OUTPUT);
+
+digitalWrite(42, LOW);
+delay(100);
+digitalWrite(42, HIGH);
+delay(500);
+
+then start UART.
