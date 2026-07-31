@@ -344,79 +344,67 @@ static void handleCli(String line) {
         if (!f.valid) Serial.println("[gps] NO FIX (needs sky view; cold start can take 30-60s)");
     }
     else if (cmd == "gpsdiag") {
-        /* GPIO pin scan: EN=HIGH held throughout, 9600 baud, 5 s per candidate.
-         * Closes GpsUart's Serial1 first to avoid IO-matrix conflict, then
-         * tries every plausible RX GPIO so we can find which pin L76K TX
-         * is actually wired to on this board revision.
-         * Restores GPS state on exit. */
+        /* Targeted UART test only — no pin scanning (broad scanning corrupts
+         * the IO matrix and poisons subsequent gpstest runs).
+         * Tests the one known-correct UART: EN=HIGH, Serial1, GPIO38/39.
+         * Reboots at the end so the UART state is guaranteed clean. */
         const uint8_t EN_PIN = 34, SBY_PIN = 40, RST_PIN = 42;
 
-        /* Power GPS on and hold it — do NOT toggle EN during the scan. */
-        gps.powerOff();   /* closes Serial1, drives EN LOW briefly */
-        delay(100);
+        Serial.println("[gpsdiag] Closing GpsUart...");
+        gps.powerOff();
+        delay(200);
+
+        Serial.println("[gpsdiag] EN=HIGH + reset pulse, then 10 s read on GPIO38 (Serial1)...");
         pinMode(EN_PIN,  OUTPUT); digitalWrite(EN_PIN, HIGH);
         pinMode(SBY_PIN, OUTPUT); digitalWrite(SBY_PIN, HIGH);
         pinMode(RST_PIN, OUTPUT); digitalWrite(RST_PIN, HIGH);
-        delay(1500);   /* 1.5 s: L76K needs ~1 s before first NMEA sentence */
+        delay(200);
+        digitalWrite(RST_PIN, LOW);  delay(100);
+        digitalWrite(RST_PIN, HIGH); delay(1000);  /* L76K ~1 s to first NMEA */
 
-        Serial.println("[gpsdiag] EN=HIGH, 9600 baud — scanning RX candidates (5s each)...");
-        Serial.println("[gpsdiag] RX/TX  bytes  preview");
-        Serial.println("[gpsdiag] -----  -----  -------");
+        Serial1.begin(9600, SERIAL_8N1, /*RX*/38, /*TX*/39);
+        delay(50);
 
-        /* Full GPIO scan — module uses jumper wires so TX can land anywhere.
-         * Skip: 26-32 (SPI flash), 43/44 (USB-CDC console), 34 (EN), 40 (SBY), 42 (RST).
-         * Each entry is {rx, tx}.  TX=39 for all except the explicit swap {39,38}. */
-        /* Skip GPIO18 (Heltec V4 LED — crashes chip when reconfigured),
-         * GPIO19/20 (ESP32-S3 USB D-/D+ — hard fault if touched). */
-        const uint8_t candidates[][2] = {
-            { 0,39},{ 1,39},{ 2,39},{ 3,39},{ 4,39},{ 5,39},{ 6,39},{ 7,39},
-            { 8,39},{ 9,39},{10,39},{11,39},{12,39},{13,39},{14,39},{15,39},
-            {16,39},{17,39},          /* 18/19/20 skipped */          {21,39},
-            {33,39},{35,39},{36,39},{37,39},{38,39},
-            {39,38},   /* RX/TX swapped */
-            {41,39},{45,39},{46,39},{47,39},{48,39}
-        };
-        uint8_t winner = 0;
-
-        for (auto &p : candidates) {
-            uint8_t rxp = p[0], txp = p[1];
-            Serial2.begin(9600, SERIAL_8N1, rxp, txp);
-            delay(30);
-            uint32_t t0 = millis(), count = 0;
-            uint8_t preview[32]; uint32_t pIdx = 0;
-            while (millis() - t0 < 5000) {
-                while (Serial2.available()) {
-                    uint8_t b = (uint8_t)Serial2.read();
-                    count++;
-                    if (pIdx < sizeof(preview)) preview[pIdx++] = b;
-                }
-                delay(2);
+        uint32_t t0 = millis(), count = 0, printable = 0;
+        uint8_t preview[64]; uint32_t pIdx = 0;
+        while (millis() - t0 < 10000) {
+            while (Serial1.available()) {
+                uint8_t b = (uint8_t)Serial1.read();
+                count++;
+                if (b >= 0x20 && b < 0x7F) printable++;
+                if (pIdx < sizeof(preview)) preview[pIdx++] = b;
             }
-            Serial2.end();
-            Serial.printf("[gpsdiag]  %2u/%2u  %-5lu  ", rxp, txp, (unsigned long)count);
-            if (count == 0) {
-                Serial.print("(nothing)");
-            } else {
-                uint32_t show = pIdx < 20 ? pIdx : 20;
-                for (uint32_t i = 0; i < show; i++) {
-                    uint8_t b = preview[i];
-                    if (b >= 0x20 && b < 0x7F) Serial.printf("%c", b);
-                    else                        Serial.printf("\\x%02X", b);
-                }
-                if (!winner) winner = rxp;
+            delay(2);
+        }
+        Serial1.end();
+
+        Serial.printf("[gpsdiag] bytes=%-5lu  printable=%lu%%\n",
+                      (unsigned long)count,
+                      count ? (unsigned long)(printable * 100 / count) : 0UL);
+        if (pIdx > 0) {
+            Serial.print("[gpsdiag] preview: ");
+            uint32_t show = pIdx < 48 ? pIdx : 48;
+            for (uint32_t i = 0; i < show; i++) {
+                uint8_t b = preview[i];
+                if (b >= 0x20 && b < 0x7F) Serial.printf("%c", b);
+                else                        Serial.printf("\\x%02X", b);
             }
             Serial.println();
         }
-
         Serial.println("[gpsdiag] ---");
-        if (winner)
-            Serial.printf("[gpsdiag] RESULT: L76K TX appears on GPIO%u — update PIN_GPS_RX if not 38.\n", winner);
-        else
-            Serial.println("[gpsdiag] RESULT: no NMEA on any candidate pin.\n"
-                           "  Check: module fully seated, connector not bent, EN rail voltage ~3.3 V on GPIO34.");
-
-        /* Restore: re-open GpsUart so normal operation continues. */
-        gps.powerOn();
+        if (count == 0) {
+            Serial.println("[gpsdiag] RESULT: zero bytes on GPIO38.");
+            Serial.println("  1. Flip the JST cable 180 deg and rerun gpsdiag.");
+            Serial.println("  2. Check GPIO34 pad = ~3.3 V with EN=HIGH (multimeter).");
+        } else if (count > 10 && printable * 100 / count > 80) {
+            Serial.println("[gpsdiag] RESULT: NMEA flowing — run `gpstest 120` outdoors.");
+        } else {
+            Serial.println("[gpsdiag] RESULT: some bytes but not clean NMEA.");
+            Serial.println("  Try flipping the JST cable 180 deg.");
+        }
+        Serial.println("[gpsdiag] Rebooting for clean UART state...");
+        delay(500);
+        ESP.restart();
     }
     else if (cmd == "sleep") goToSleep();
     else if (cmd == "reboot") ESP.restart();
