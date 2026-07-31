@@ -1,0 +1,155 @@
+/*
+ * lora_link.c — robust framed serial link for the LoRa gateway (ESP-IDF / C).
+ *
+ * Replaces the old human-readable "RX <hex> <rssi> <snr>\n" text output, which
+ * had no reliable frame boundary and let corrupt/partial lines merge together.
+ *
+ * WIRE FORMAT
+ * -----------
+ * Frame (BEFORE COBS), little-endian for multibyte fields:
+ *     LEN     u8     payload length (0..255)
+ *     TYPE    u8     message type (0x01 ALERT, 0x02 HEARTBEAT, 0x03 ACK, ...)
+ *     PAYLOAD LEN    opaque bytes (e.g. the encrypted LoRa frame)
+ *     RSSI    i16 LE dBm  (RX frames; 0 otherwise)
+ *     SNR     i8     dB   (RX frames; 0 otherwise)
+ *     CRC16   u16 LE CRC-16/CCITT-FALSE over LEN..SNR (everything before CRC)
+ *
+ * On the wire: COBS-encode the whole frame, then append a single 0x00 byte.
+ * Because COBS removes every 0x00 from the body, a 0x00 byte on the wire means
+ * "frame boundary" and NOTHING else. Corruption is caught by the CRC and the
+ * explicit length, and never bleeds into the next frame — the reader resyncs on
+ * the next 0x00 automatically.
+ *
+ * Suggested header (lora_link.h):
+ *     #include "driver/uart.h"
+ *     void lora_frame_send(uart_port_t port, uint8_t type,
+ *                          const uint8_t *payload, uint8_t len,
+ *                          int16_t rssi, int8_t snr);
+ *     typedef void (*lora_frame_cb)(uint8_t type, const uint8_t *payload,
+ *                                   uint8_t len, int16_t rssi, int8_t snr, void *ctx);
+ *     typedef struct { uint8_t buf[300]; size_t n; bool overflow; } lora_rx_t;
+ *     void lora_rx_init(lora_rx_t *rx);
+ *     void lora_rx_feed(lora_rx_t *rx, const uint8_t *data, size_t len,
+ *                       lora_frame_cb cb, void *ctx);
+ */
+
+#include <stdint.h>
+#include <stddef.h>
+#include <stdbool.h>
+#include <string.h>
+#include "driver/uart.h"
+
+#define LORA_MAX_PAYLOAD 255
+#define LORA_RAW_MAX     (1 + 1 + LORA_MAX_PAYLOAD + 2 + 1 + 2)      /* 262 */
+#define LORA_COBS_MAX    (LORA_RAW_MAX + (LORA_RAW_MAX / 254) + 2)   /* + overhead + delim */
+
+/* ---- CRC-16/CCITT-FALSE (poly 0x1021, init 0xFFFF, no reflect, no xorout) ---- */
+static uint16_t crc16_ccitt(const uint8_t *p, size_t n)
+{
+    uint16_t crc = 0xFFFF;
+    for (size_t i = 0; i < n; i++) {
+        crc ^= (uint16_t)p[i] << 8;
+        for (int b = 0; b < 8; b++)
+            crc = (crc & 0x8000) ? (uint16_t)((crc << 1) ^ 0x1021)
+                                 : (uint16_t)(crc << 1);
+    }
+    return crc;
+}
+
+/* ---- COBS encode; returns encoded length (no delimiter appended) ---- */
+static size_t cobs_encode(const uint8_t *in, size_t len, uint8_t *out)
+{
+    uint8_t *enc = out;
+    uint8_t *code_p = enc++;   /* reserve first code byte */
+    uint8_t code = 1;
+    for (size_t i = 0; i < len; i++) {
+        uint8_t c = in[i];
+        if (c) { *enc++ = c; code++; }
+        if (!c || code == 0xFF) { *code_p = code; code = 1; code_p = enc++; }
+    }
+    *code_p = code;
+    return (size_t)(enc - out);
+}
+
+/* ---- COBS decode; returns decoded length, or -1 on malformed input ---- */
+static int cobs_decode(const uint8_t *in, size_t len, uint8_t *out, size_t out_cap)
+{
+    size_t r = 0, w = 0;
+    while (r < len) {
+        uint8_t code = in[r++];
+        if (code == 0) return -1;                 /* stray delimiter inside body */
+        for (uint8_t i = 1; i < code; i++) {
+            if (r >= len || w >= out_cap) return -1;
+            out[w++] = in[r++];
+        }
+        if (code < 0xFF && r < len) {
+            if (w >= out_cap) return -1;
+            out[w++] = 0;
+        }
+    }
+    return (int)w;
+}
+
+/* ============================ TX ============================ */
+void lora_frame_send(uart_port_t port, uint8_t type,
+                     const uint8_t *payload, uint8_t len,
+                     int16_t rssi, int8_t snr)
+{
+    uint8_t raw[LORA_RAW_MAX];
+    size_t n = 0;
+    raw[n++] = len;
+    raw[n++] = type;
+    if (len) memcpy(&raw[n], payload, len);
+    n += len;
+    raw[n++] = (uint8_t)(rssi & 0xFF);
+    raw[n++] = (uint8_t)((rssi >> 8) & 0xFF);
+    raw[n++] = (uint8_t)snr;
+    uint16_t crc = crc16_ccitt(raw, n);
+    raw[n++] = (uint8_t)(crc & 0xFF);
+    raw[n++] = (uint8_t)((crc >> 8) & 0xFF);
+
+    uint8_t enc[LORA_COBS_MAX];
+    size_t elen = cobs_encode(raw, n, enc);
+    enc[elen++] = 0x00;                            /* frame delimiter */
+    uart_write_bytes(port, (const char *)enc, elen);
+}
+
+/* ============================ RX ============================ */
+typedef void (*lora_frame_cb)(uint8_t type, const uint8_t *payload, uint8_t len,
+                              int16_t rssi, int8_t snr, void *ctx);
+
+typedef struct { uint8_t buf[LORA_COBS_MAX]; size_t n; bool overflow; } lora_rx_t;
+
+void lora_rx_init(lora_rx_t *rx) { rx->n = 0; rx->overflow = false; }
+
+void lora_rx_feed(lora_rx_t *rx, const uint8_t *data, size_t len,
+                  lora_frame_cb cb, void *ctx)
+{
+    for (size_t i = 0; i < len; i++) {
+        uint8_t b = data[i];
+        if (b == 0x00) {                           /* end of frame */
+            if (!rx->overflow && rx->n > 0) {
+                uint8_t raw[LORA_RAW_MAX];
+                int rn = cobs_decode(rx->buf, rx->n, raw, sizeof raw);
+                if (rn >= 7) {                     /* min: LEN+TYPE+RSSI+SNR+CRC, payload=0 */
+                    uint8_t plen = raw[0];
+                    if ((size_t)rn == (size_t)(1 + 1 + plen + 2 + 1 + 2)) {
+                        uint16_t rx_crc = (uint16_t)raw[rn - 2] |
+                                          ((uint16_t)raw[rn - 1] << 8);
+                        if (crc16_ccitt(raw, rn - 2) == rx_crc) {
+                            uint8_t  type = raw[1];
+                            int16_t  rssi = (int16_t)((uint16_t)raw[2 + plen] |
+                                            ((uint16_t)raw[3 + plen] << 8));
+                            int8_t   snr  = (int8_t)raw[4 + plen];
+                            cb(type, &raw[2], plen, rssi, snr, ctx);
+                        }
+                    }
+                }
+            }
+            rx->n = 0; rx->overflow = false;       /* resync no matter what */
+        } else {
+            if (rx->n < sizeof rx->buf) rx->buf[rx->n++] = b;
+            else rx->overflow = true;              /* oversized: drop to next delimiter */
+        }
+    }
+}

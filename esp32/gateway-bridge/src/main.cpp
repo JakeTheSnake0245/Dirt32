@@ -1,26 +1,22 @@
 /*
- * Dirt32 gateway radio bridge.
+ * Dirt32 gateway radio bridge — Heltec WiFi LoRa 32 V4.
  *
- * Line protocol on USB serial (115200, \n-terminated):
- *   Bridge -> Pi:
- *     RDY                          on boot / after CFG
- *     RX <hex> <rssi_dbm> <snr_db> received frame (raw, unverified)
- *     OK <what> / ERR <detail>     command results
- *   Pi -> Bridge:
- *     CFG <freq_mhz> <sf> <bw_khz> <cr> <net_id> <txpower_dbm>
- *     TX <hex>                     transmit a frame (gateway-sealed ACK)
- *     PING                         liveness -> OK PING
+ * Dumb radio ↔ serial bridge: NO keys, NO crypto.
+ * Receives LoRa frames and forwards them to the Pi; transmits frames handed
+ * to it (gateway-sealed ACKs).  All trust decisions happen on the Linux side.
  *
- * The sync word is derived from net_id exactly like the node firmware:
- * 0x12 ^ net_id, avoiding 0x34 (public LoRaWAN).
+ * Serial protocol: COBS/CRC-16 binary framing (lora_link.h).
+ * Replaces the old "RX <hex> <rssi> <snr>" text output that garbled on
+ * USB-CDC packet boundaries.
  */
 #include <Arduino.h>
 #include <RadioLib.h>
 #include <oled_raw.h>
+#include <lora_link.h>
 
 static Module mod(LORA_NSS, LORA_DIO1, LORA_RST, LORA_BUSY);
 static SX1262 radio(&mod);
-static bool radioUp = false;
+static bool   radioUp = false;
 
 /* DIO1 interrupt flag — set by ISR, cleared after each packet is consumed.
  * Using interrupt-based detection prevents spurious reads from the
@@ -31,19 +27,21 @@ static void ARDUINO_ISR_ATTR onRxDone() { rxDone = true; }
 
 /* ---------- status screen (onboard OLED) ----------
  * The bridge is USB-powered on the Pi, so the screen stays on.
- * PRG button toggles it (some prefer it dark in the field).      */
-static OledRaw oled;
-static bool     scrOn = true;
-static uint32_t rxCount = 0, txCount = 0;
+ * PRG button toggles it (some prefer it dark in the field).              */
+static OledRaw  oled;
+static bool     scrOn    = true;
+static uint32_t rxCount  = 0, txCount = 0;
 static float    lastRssi = 0, lastSnr = 0;
-static uint32_t lastRxAt = 0, lastHostAt = 0;   /* millis(); 0 = never */
-static float    cfgFreq = 0; static int cfgSf = 0, cfgNet = 0;
+static uint32_t lastRxAt = 0, lastHostAt = 0;  /* millis(); 0 = never */
+static float    cfgFreq  = 0;
+static int      cfgSf    = 0, cfgNet = 0;
 
 #ifndef PIN_BUTTON
 #define PIN_BUTTON 0
 #endif
 
-static void scrRender() {
+static void scrRender()
+{
     char line[32];
     uint32_t now = millis();
     oled.clear();
@@ -72,7 +70,6 @@ static void scrRender() {
         oled.text(0, 4, "NO FRAMES YET");
     }
 
-    /* host = Pi daemon; it PINGs/CFGs over USB serial */
     if (lastHostAt == 0)
         snprintf(line, sizeof(line), "HOST: NEVER SEEN");
     else if (now - lastHostAt < 15000)
@@ -85,19 +82,20 @@ static void scrRender() {
     oled.flush();
 }
 
-static void scrPoll() {
-    static bool rawLast = false, btnLast = false;
+static void scrPoll()
+{
+    static bool     rawLast = false, btnLast = false;
     static uint32_t changedAt = 0, lastDraw = 0;
-    bool raw = (digitalRead(PIN_BUTTON) == LOW);
+    bool     raw = (digitalRead(PIN_BUTTON) == LOW);
     uint32_t now = millis();
     if (raw != rawLast) { rawLast = raw; changedAt = now; }
     if ((now - changedAt) > 40 && raw != btnLast) {
         btnLast = raw;
-        if (raw) {                       /* press toggles the screen */
+        if (raw) {
             scrOn = !scrOn;
             if (scrOn) { if (oled.begin()) scrRender(); }
             else oled.sleep();
-            return;                      /* start clean next tick */
+            return;
         }
     }
     if (scrOn && oled.ready() && now - lastDraw > 1000) {
@@ -106,16 +104,10 @@ static void scrPoll() {
     }
 }
 
-static int hexVal(char c) {
-    if (c >= '0' && c <= '9') return c - '0';
-    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
-    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
-    return -1;
-}
-
-static bool applyCfg(float f, int sf, float bw, int cr, int net, int pwr) {
-    uint8_t sync = (uint8_t)(0x12 ^ (uint8_t)net);
-    if (sync == 0x34) sync ^= 0x01;
+static bool applyCfg(float f, int sf, float bw, int cr, int net, int pwr)
+{
+    uint8_t sync = (uint8_t)(0x12u ^ (uint8_t)net);
+    if (sync == 0x34u) sync ^= 0x01u;
     int st = radio.begin(f, bw, sf, cr, sync, pwr, 8);
     if (st != RADIOLIB_ERR_NONE) return false;
     radio.setCRC(true);
@@ -126,80 +118,92 @@ static bool applyCfg(float f, int sf, float bw, int cr, int net, int pwr) {
     return true;
 }
 
-static void handleLine(String &line) {
-    line.trim();
-    if (line.length() == 0) return;
+/* ---------- Pi→Bridge frame handler (called from ll_rx_feed) ----------- */
+static LLRx llRx;
 
-    lastHostAt = millis();               /* any line = the Pi is alive */
+static void onPiFrame(uint8_t type, const uint8_t *payload, uint8_t len,
+                      int16_t /*rssi_unused*/, int8_t /*snr_unused*/)
+{
+    lastHostAt = millis();   /* any valid frame = Pi is alive */
 
-    if (line == "PING") { Serial.println("OK PING"); return; }
-
-    if (line.startsWith("CFG ")) {
-        float f, bw; int sf, cr, net, pwr;
-        if (sscanf(line.c_str() + 4, "%f %d %f %d %d %d",
-                   &f, &sf, &bw, &cr, &net, &pwr) != 6) {
-            Serial.println("ERR CFG parse");
+    /* ---- TYPE_CFG: apply new radio config ---- */
+    if (type == LL_TYPE_CFG) {
+        if (len != sizeof(LLCfg)) {
+            ll_send(LL_TYPE_ERR);
             return;
         }
-        radioUp = applyCfg(f, sf, bw, cr, net, pwr);
-        if (radioUp) { cfgFreq = f; cfgSf = sf; cfgNet = net; }
-        Serial.println(radioUp ? "OK CFG" : "ERR CFG radio");
-        if (radioUp) Serial.println("RDY");
-        return;
-    }
-
-    if (line.startsWith("TX ")) {
-        if (!radioUp) { Serial.println("ERR TX no-cfg"); return; }
-        uint8_t buf[64];
-        size_t n = 0;
-        const char *p = line.c_str() + 3;
-        while (p[0] && p[1] && n < sizeof(buf)) {
-            int hi = hexVal(p[0]), lo = hexVal(p[1]);
-            if (hi < 0 || lo < 0) { Serial.println("ERR TX hex"); return; }
-            buf[n++] = (uint8_t)((hi << 4) | lo);
-            p += 2;
+        LLCfg cfg;
+        memcpy(&cfg, payload, sizeof(cfg));
+        float freq_mhz = (float)cfg.freq_hz / 1e6f;
+        float bw_khz   = (float)cfg.bw_hz   / 1e3f;
+        radioUp = applyCfg(freq_mhz, cfg.sf, bw_khz, cfg.cr,
+                           cfg.net_id, cfg.txpwr_dbm);
+        if (radioUp) {
+            cfgFreq = freq_mhz;
+            cfgSf   = cfg.sf;
+            cfgNet  = cfg.net_id;
+            ll_send(LL_TYPE_RDY);   /* signal Pi that bridge is back in RX */
+        } else {
+            ll_send(LL_TYPE_ERR);
         }
-        int st = radio.transmit(buf, n);
-        /* Clear the TX_DONE IRQ that fired during transmit — without this,
-         * rxDone would be true on the next loop tick and we'd try to read
-         * a "packet" that doesn't exist, causing getPacketLength to return
-         * stale FIFO data.                                               */
-        rxDone = false;
-        radio.startReceive();               /* back to listening immediately */
-        if (st == RADIOLIB_ERR_NONE) txCount++;
-        Serial.println(st == RADIOLIB_ERR_NONE ? "OK TX" : "ERR TX radio");
         return;
     }
 
-    Serial.println("ERR unknown");
+    /* ---- TYPE_PING: keepalive ---- */
+    if (type == LL_TYPE_PING) {
+        ll_send(LL_TYPE_OK);
+        return;
+    }
+
+    /* ---- TYPE_TX: transmit a frame via radio (gateway-sealed ACK) ---- */
+    if (type == LL_TYPE_TX) {
+        if (!radioUp) {
+            ll_send(LL_TYPE_ERR);
+            return;
+        }
+        int st = radio.transmit((uint8_t *)payload, (size_t)len);
+        /* Clear TX_DONE IRQ that fired during transmit so rxDone doesn't
+         * trip on the next loop iteration with stale FIFO data.          */
+        rxDone = false;
+        radio.startReceive();
+        if (st == RADIOLIB_ERR_NONE) { txCount++; ll_send(LL_TYPE_OK); }
+        else                         { ll_send(LL_TYPE_ERR); }
+        return;
+    }
+
+    /* Unknown type: ignore silently */
 }
 
-void setup() {
+// ===========================================================================
+void setup()
+{
     Serial.begin(115200);
     /* Native USB-CDC: wait briefly for the host to enumerate. */
     uint32_t t0 = millis();
     while (!Serial && millis() - t0 < 2000) delay(10);
     delay(300);
+
+    ll_rx_init(&llRx);
+
     /* Default config so the bridge hears something before the daemon
-       connects; the daemon always sends CFG on open. */
+       connects; the daemon always sends CFG on open.                     */
     radioUp = applyCfg(903.0f, 10, 125.0f, 5, 1, 10);
-    Serial.println(radioUp ? "RDY" : "ERR boot radio");
+    ll_send(radioUp ? LL_TYPE_RDY : LL_TYPE_ERR);
 
     pinMode(PIN_BUTTON, INPUT_PULLUP);
-    if (oled.begin()) scrRender();       /* USB-powered: screen on by default */
+    if (oled.begin()) scrRender();
 }
 
-void loop() {
-    static String lineBuf;
+void loop()
+{
+    /* Feed all available serial bytes into the lora_link RX state machine.
+     * ll_rx_feed calls onPiFrame synchronously for every validated frame. */
     while (Serial.available()) {
-        char c = (char)Serial.read();
-        if (c == '\n' || c == '\r') {
-            if (lineBuf.length()) handleLine(lineBuf);
-            lineBuf = "";
-        } else if (lineBuf.length() < 200) lineBuf += c;
+        uint8_t b = (uint8_t)Serial.read();
+        ll_rx_feed(&llRx, &b, 1, onPiFrame);
     }
 
-    /* Only enter when DIO1 actually fired (RX_DONE IRQ).
+    /* Radio RX — only enter when DIO1 actually fired (RX_DONE IRQ).
      * Polling getPacketLength() was unreliable: GET_RX_BUFFER_STATUS on
      * SX126x is not cleared after readData, causing every packet to fire
      * twice and contaminating the second read with stale FIFO bytes.     */
@@ -211,19 +215,12 @@ void loop() {
             int st = radio.readData(buf, len);
             if (st == RADIOLIB_ERR_NONE) {
                 float rssi = radio.getRSSI(), snr = radio.getSNR();
-                char hex[132];
-                memset(hex, 0, sizeof(hex));
-                for (int i = 0; i < len; i++)
-                    sprintf(hex + i * 2, "%02x", buf[i]);
-                /* Build the full line first, then write in one call.
-                 * Multiple Serial.print() calls on USB CDC can be split
-                 * across USB packets; if the Pi reads between them it
-                 * accumulates a partial line that corrupts the next one. */
-                char rxLine[160];
-                snprintf(rxLine, sizeof(rxLine), "RX %s %d %d\n",
-                         hex, (int)rssi, (int)(snr * 10));
-                Serial.print(rxLine);
-                rxCount++; lastRssi = rssi; lastSnr = snr; lastRxAt = millis();
+                /* Send as a single atomic COBS frame — no text splitting,
+                 * no USB-CDC boundary issues.                             */
+                ll_send(LL_TYPE_ALERT, buf, (uint8_t)len,
+                        (int16_t)rssi, (int8_t)snr);
+                rxCount++;
+                lastRssi = rssi; lastSnr = snr; lastRxAt = millis();
             }
         }
         radio.startReceive();
