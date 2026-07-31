@@ -1,0 +1,125 @@
+For the Heltec WiFi LoRa 32 V4 + Quectel L76K GNSS, Heltec's expected configuration is:
+
+Function	Setting
+UART baud rate	9600 baud
+Data format	8-N-1
+GNSS RX (ESP32 receives from GPS TX)	GPIO38
+GNSS TX (ESP32 sends to GPS RX)	GPIO39
+GNSS Enable / Power Control	GPIO34
+
+The important part is that the EN pin is not a serial enable. On the Heltec V4 it controls the GPS power rail:
+
+ESP32 GPIO34  --->  VGNSS_Ctrl ---> L76K power
+
+So your startup should look like:
+
+#define GPS_RX 38
+#define GPS_TX 39
+#define GPS_EN 34
+
+HardwareSerial GPS(1);
+
+void setup()
+{
+    Serial.begin(115200);
+
+    pinMode(GPS_EN, OUTPUT);
+    digitalWrite(GPS_EN, HIGH);   // enable GNSS power
+
+    delay(500);
+
+    GPS.begin(
+        9600,
+        SERIAL_8N1,
+        GPS_RX,
+        GPS_TX
+    );
+
+    Serial.println("GPS started");
+}
+
+void loop()
+{
+    while (GPS.available()) {
+        Serial.write(GPS.read());
+    }
+}
+
+A couple Heltec V4 gotchas
+1. Make sure GPS power is actually enabled
+
+The V4 added a controllable GNSS power rail. Unlike older boards where GPS was always powered, the V4 can shut it off.
+
+If GPIO34 is LOW:
+
+ESP32 running
+      |
+      X
+      |
+ GPS dead
+
+You will get zero NMEA output.
+
+2. RX/TX naming causes confusion
+
+The physical connection is:
+
+L76K TX  ----> ESP32 GPIO38 (RX)
+
+L76K RX  <---- ESP32 GPIO39 (TX)
+
+Do not connect:
+
+TX -> TX
+RX -> RX
+
+A lot of Heltec/Meshtastic users get caught by this.
+
+3. If you get NMEA but no fix
+
+Your module is alive. You should see:
+
+$GNGGA,...
+$GNRMC,...
+$GPGSV,...
+
+but fields may look like:
+
+$GNGGA,xxxx,,,,,0,00,...
+
+The 0 means:
+
+No fix yet
+
+At that point it is an antenna/sky-view/time issue.
+
+The L76K can take a while on a cold start. Users with Heltec V4 + L76K have reported needing true outdoor sky view rather than a window before getting a fix.
+
+For your Dirt32 firmware specifically
+
+Given your boot log:
+
+[boot] sensor rail + SPI...
+[sensor] front-end init FAILED
+[boot] detector init...
+Bench mode — CLI active
+
+I would add a GPS debug block before entering bench mode:
+
+digitalWrite(34, HIGH);
+delay(1000);
+
+while(GPS.available())
+{
+    Serial.write(GPS.read());
+}
+
+If nothing comes out:
+
+GPIO34 isn't enabling GPS
+UART pins are wrong
+L76K isn't powered
+
+If NMEA comes out:
+
+your GPS driver/parser is the problem
