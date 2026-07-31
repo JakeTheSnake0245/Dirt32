@@ -1,0 +1,63 @@
+1. Heltec officially supports the L76K on the V4.3
+
+The V4.3 product page explicitly lists the 1.25 mm 8-pin GNSS connector and the Quectel L76K as the supported GNSS module. It also states the board has 3 UARTs and provides a dedicated GNSS control pin.
+
+For the standard V4.3 (not the newer R8 revision), the documented GNSS control pins are:
+
+Signal	GPIO
+GPS RX	38
+GPS TX	39
+GPS EN	34
+GPS RESET	42
+
+For the V4.3 R8, some of these pins move (for example, GNSS enable moves to GPIO42), so using the wrong board revision's pin map can absolutely break GPS.
+
+2. PlatformIO is behind Heltec
+
+This is the part I think has been hurting you.
+
+PlatformIO's official board list contains the older Heltec board definitions (V2/V3 style), but does not provide a dedicated WiFi LoRa 32 V4.3 board definition.
+
+That means developers typically do one of three things:
+
+use esp32-s3-devkitc-1
+use a custom board JSON
+use Heltec's Arduino package rather than relying on PlatformIO's built-in board
+
+So Replit using a V3 board definition is not best practice.
+
+3. Meshtastic users all use the same pins
+
+Across recent reports, users consistently report the built-in L76K using:
+
+RX = GPIO38
+TX = GPIO39
+EN = GPIO34
+
+Some also note to verify TX/RX orientation if using an external module.
+
+Notice what nobody says:
+
+use Serial2
+GPIO38 is unusable
+UART1 is broken
+4. I could not find anyone saying "use Serial2"
+
+This is the biggest point.
+
+I searched for:
+
+Heltec V4 GPS Serial2
+UART1 broken
+GPIO38 conflict
+L76K Serial2
+
+I found no evidence that the Heltec V4 requires using Serial2.
+
+That doesn't mean it can't work—it means it is not the documented or community-standard solution.
+
+5. There are board revision differences
+
+One thing that did stand out is that Heltec has introduced revisions (V4.2, V4.3, V4.3 R8) with GPIO changes. Users who selected the wrong firmware profile saw incorrect GPIO behavior until they switched to the proper board profile.
+
+That aligns much more closely with your symptoms than "UART1 is broken."

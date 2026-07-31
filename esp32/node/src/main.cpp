@@ -348,21 +348,19 @@ static void handleCli(String line) {
     else if (cmd == "gpsdiag") {
         /* Targeted UART test only — no pin scanning (broad scanning corrupts
          * the IO matrix and poisons subsequent gpstest runs).
-         * Tests the one known-correct UART: EN=HIGH, Serial1, GPIO38/39.
+         * Heltec-documented method only: EN(34)=HIGH, RESET(42)=HIGH,
+         * Serial1 on RX=38/TX=39 at 9600. No standby pin, no reset pulse.
          * Reboots at the end so the UART state is guaranteed clean. */
-        const uint8_t EN_PIN = 34, SBY_PIN = 40, RST_PIN = 42;
+        const uint8_t EN_PIN = 34, RST_PIN = 42;
 
         Serial.println("[gpsdiag] Closing GpsUart...");
         gps.powerOff();
         delay(200);
 
-        Serial.println("[gpsdiag] EN=HIGH + reset pulse, then 10 s read on GPIO38 (Serial1)...");
+        Serial.println("[gpsdiag] EN=HIGH, RESET=HIGH, then 10 s read on GPIO38 (Serial1)...");
         pinMode(EN_PIN,  OUTPUT); digitalWrite(EN_PIN, HIGH);
-        pinMode(SBY_PIN, OUTPUT); digitalWrite(SBY_PIN, HIGH);
         pinMode(RST_PIN, OUTPUT); digitalWrite(RST_PIN, HIGH);
-        delay(200);
-        digitalWrite(RST_PIN, LOW);  delay(100);
-        digitalWrite(RST_PIN, HIGH); delay(1000);  /* L76K ~1 s to first NMEA */
+        delay(1000);  /* L76K ~1 s to first NMEA */
 
         Serial1.begin(9600, SERIAL_8N1, /*RX*/38, /*TX*/39);
         delay(50);
@@ -410,10 +408,12 @@ static void handleCli(String line) {
     }
     else if (cmd == "gpsraw") {
         /* Factory-exact UART dump with SPI teardown and GPIO state logging.
-         * Tries three sub-tests in order, stopping at first success:
+         * Tries sub-tests in order, stopping at first SUSTAINED (>100 byte) success:
          *   A) vanilla (no SPI.end) — Serial1
          *   B) after SPI.end        — Serial1  (catches SPI holding GPIO38)
-         *   C) after SPI.end        — Serial2  (catches UART1 peripheral issue) */
+         *   C) after SPI.end        — Serial2  (catches UART peripheral issue)
+         *   D) swapped pins RX=39   — Serial2  (catches TX/RX orientation swap)
+         *   E) EN on GPIO42 held HIGH — Serial2 (catches V4.3 R8 revision pin map) */
         uint16_t secs = rest.isEmpty() ? 10 : (uint16_t)rest.toInt();
         if (secs == 0) secs = 10;
 
@@ -473,9 +473,30 @@ static void handleCli(String line) {
         Serial2.begin(9600, SERIAL_8N1, 38, 39);
         uint32_t cC = drain(Serial2);
         Serial2.end();
-        if (cC > 0) { Serial.println("[gpsraw] DONE — UART1 (Serial1) is broken; use Serial2 for GPS."); return; }
+        /* A handful of bytes is a pin-matrix glitch, not NMEA (9600 baud NMEA
+         * is ~400+ bytes/s). Require sustained traffic before concluding. */
+        if (cC > 100) { Serial.println("[gpsraw] DONE — sustained data on Serial2 but not Serial1 (unexpected; verify)."); return; }
+        if (cC > 0)   Serial.printf("[gpsraw-C] %lu stray byte(s) — likely glitch, not NMEA. Continuing.\n", (unsigned long)cC);
 
-        Serial.println("[gpsraw] All three sub-tests returned zero.");
+        /* Sub-test D: TX/RX swapped (module TX may land on GPIO39) */
+        Serial.printf("[gpsraw-D] swapped pins — Serial2 RX=39 TX=38...");
+        Serial2.begin(9600, SERIAL_8N1, 39, 38);
+        uint32_t cD = drain(Serial2);
+        Serial2.end();
+        if (cD > 100) { Serial.println("[gpsraw] DONE — TX/RX are SWAPPED: module TX is on GPIO39. Set PIN_GPS_RX=39, PIN_GPS_TX=38."); return; }
+
+        /* Sub-test E: V4.3 R8 revision — GNSS enable moves to GPIO42.
+         * Our firmware pulses GPIO42 LOW as "RESET", which on an R8 cuts
+         * module power. Hold BOTH 34 and 42 HIGH, wait for cold boot, read. */
+        pinMode(42, OUTPUT); digitalWrite(42, HIGH);
+        delay(1500);   /* module cold boot after possible power cycling */
+        Serial.printf("[gpsraw-E] R8 pin map — EN on GPIO42 held HIGH, RX=38...");
+        Serial2.begin(9600, SERIAL_8N1, 38, 39);
+        uint32_t cE = drain(Serial2);
+        Serial2.end();
+        if (cE > 100) { Serial.println("[gpsraw] DONE — board behaves like V4.3 R8: GNSS EN is GPIO42. Stop pulsing 42 as RESET; treat it as EN."); return; }
+
+        Serial.println("[gpsraw] All sub-tests returned no sustained data.");
         Serial.printf("[gpsraw] GPIO38 final level: %s\n", readGPIO38());
         Serial.println("  GPIO38 reads LOW  → pin is being driven LOW by the board (SPI MISO pull-down or short).");
         Serial.println("  GPIO38 reads HIGH → pin is floating or pulled up; L76K TX may be disconnected from this GPIO.");

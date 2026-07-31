@@ -2,3 +2,4 @@
 - [Dirt32 gateway decisions](dirt32-gateway-decisions.md) — bridge holds no keys, Pi daemon is stdlib-only Python, C↔Python vector tests are the compat contract, /gw/ not /api/ in preview.
 - [Heltec V4 L76K GPS EN pin](gps-en-pin.md) — GPIO34 is active HIGH (not LOW); wrong polarity = zero NMEA output.
 - [SPI clamping GPIO38 (GNSS_RX)](spi-gpio38-conflict.md) — SPI.begin() without explicit pins drives GPIO38 LOW via FSPIWP; must use SPI.begin(9,11,10,-1).
+- [Heltec V4.3 GPS — manufacturer method only](uart2-gps.md) — Serial1, RX=38/TX=39, EN=34 HIGH, RESET=42 HIGH, no pulses/standby/Serial2; require >100 sustained bytes before any UART conclusion; watch for stale-flash false negatives.

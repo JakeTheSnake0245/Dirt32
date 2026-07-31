@@ -8,10 +8,7 @@
 #define PIN_GPS_TX 39       /* CPU -> L76K RX */
 #endif
 #ifndef PIN_GPS_EN
-#define PIN_GPS_EN 34       /* active LOW */
-#endif
-#ifndef PIN_GPS_STANDBY
-#define PIN_GPS_STANDBY 40  /* HIGH = force wake */
+#define PIN_GPS_EN 34       /* active HIGH — enables VGNSS rail */
 #endif
 #ifndef PIN_GPS_RESET
 #define PIN_GPS_RESET 42    /* LOW > 100 ms resets */
@@ -20,24 +17,19 @@
 #define GPS_BAUD 9600
 #endif
 
+/* Heltec-documented method: Serial1 on RX=38 / TX=39, 9600 baud. */
 static HardwareSerial &gpsSerial = Serial1;
 
 void GpsUart::powerOn() {
-    /* GPIO34 HIGH = VGNSS_Ctrl rail enabled (confirmed by Heltec V4 schematic).
-     * LOW = module dead, floating = undefined (do not leave floating).
+    /* Heltec V4.3 documented GNSS method — nothing more:
+     *   EN (GPIO34) HIGH  = VGNSS rail on
+     *   RESET (GPIO42) HIGH = not in reset (no pulse; L76K self-starts)
      * L76K needs ~1 s after power-on before first NMEA sentence appears. */
     pinMode(PIN_GPS_EN, OUTPUT);
-    pinMode(PIN_GPS_STANDBY, OUTPUT);
     pinMode(PIN_GPS_RESET, OUTPUT);
-    digitalWrite(PIN_GPS_EN, HIGH);       /* enable VGNSS power rail */
-    digitalWrite(PIN_GPS_STANDBY, HIGH);  /* force wake */
-    digitalWrite(PIN_GPS_RESET, HIGH);    /* not in reset */
-    delay(200);                           /* rail settle */
-    /* Hardware reset pulse — some L76K boards need this to start outputting */
-    digitalWrite(PIN_GPS_RESET, LOW);
-    delay(100);
+    digitalWrite(PIN_GPS_EN, HIGH);
     digitalWrite(PIN_GPS_RESET, HIGH);
-    delay(1000);                          /* L76K: ~1 s after reset to first NMEA */
+    delay(1000);
     gpsSerial.begin(GPS_BAUD, SERIAL_8N1, PIN_GPS_RX, PIN_GPS_TX);
     _len = 0;
     _partial = GpsFixResult{};
@@ -45,7 +37,6 @@ void GpsUart::powerOn() {
 
 void GpsUart::powerOff() {
     gpsSerial.end();
-    digitalWrite(PIN_GPS_STANDBY, LOW);   /* allow sleep */
     digitalWrite(PIN_GPS_EN, LOW);        /* cut VGNSS power rail */
 }
 
