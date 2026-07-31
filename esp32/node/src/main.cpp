@@ -357,8 +357,8 @@ static void handleCli(String line) {
         gps.powerOff();
         delay(200);
 
-        Serial.println("[gpsdiag] EN=HIGH, RESET=HIGH, then 10 s read on GPIO38 (Serial1)...");
-        pinMode(EN_PIN,  OUTPUT); digitalWrite(EN_PIN, HIGH);
+        Serial.println("[gpsdiag] EN=LOW (VGNSS_Ctrl active LOW), RESET=HIGH, then 10 s read on GPIO38 (Serial1)...");
+        pinMode(EN_PIN,  OUTPUT); digitalWrite(EN_PIN, LOW);
         pinMode(RST_PIN, OUTPUT); digitalWrite(RST_PIN, HIGH);
         delay(1000);  /* L76K ~1 s to first NMEA */
 
@@ -395,7 +395,7 @@ static void handleCli(String line) {
         if (count == 0) {
             Serial.println("[gpsdiag] RESULT: zero bytes on GPIO38.");
             Serial.println("  1. Flip the JST cable 180 deg and rerun gpsdiag.");
-            Serial.println("  2. Check GPIO34 pad = ~3.3 V with EN=HIGH (multimeter).");
+            Serial.println("  2. Measure the GPS module VCC pad with a multimeter (EN=LOW should give ~3.3 V).");
         } else if (count > 10 && printable * 100 / count > 80) {
             Serial.println("[gpsdiag] RESULT: NMEA flowing — run `gpstest 120` outdoors.");
         } else {
@@ -447,9 +447,10 @@ static void handleCli(String line) {
             return count;
         };
 
-        /* EN=HIGH once, held for all sub-tests */
-        pinMode(34, OUTPUT); digitalWrite(34, HIGH);
-        delay(500);
+        /* EN=LOW once, held for all sub-tests — VGNSS_Ctrl is ACTIVE LOW
+         * (Meshtastic heltec_v4: GPS_EN_ACTIVE LOW). */
+        pinMode(34, OUTPUT); digitalWrite(34, LOW);
+        delay(1500);   /* L76K cold boot after power-up */
 
         /* Sub-test A: vanilla Serial1 */
         Serial.printf("[gpsraw-A] GPIO38=%s before open; Serial1, no SPI.end()...",
@@ -485,16 +486,27 @@ static void handleCli(String line) {
         Serial2.end();
         if (cD > 100) { Serial.println("[gpsraw] DONE — TX/RX are SWAPPED: module TX is on GPIO39. Set PIN_GPS_RX=39, PIN_GPS_TX=38."); return; }
 
-        /* Sub-test E: V4.3 R8 revision — GNSS enable moves to GPIO42.
-         * Our firmware pulses GPIO42 LOW as "RESET", which on an R8 cuts
-         * module power. Hold BOTH 34 and 42 HIGH, wait for cold boot, read. */
-        pinMode(42, OUTPUT); digitalWrite(42, HIGH);
+        /* Sub-test E: V4.3 R8 revision — GNSS enable moves to GPIO42
+         * (also ACTIVE LOW per Meshtastic heltec_v4_r8). */
+        pinMode(42, OUTPUT); digitalWrite(42, LOW);
         delay(1500);   /* module cold boot after possible power cycling */
-        Serial.printf("[gpsraw-E] R8 pin map — EN on GPIO42 held HIGH, RX=38...");
+        Serial.printf("[gpsraw-E] R8 pin map — EN on GPIO42 held LOW, RX=38...");
         Serial2.begin(9600, SERIAL_8N1, 38, 39);
         uint32_t cE = drain(Serial2);
         Serial2.end();
-        if (cE > 100) { Serial.println("[gpsraw] DONE — board behaves like V4.3 R8: GNSS EN is GPIO42. Stop pulsing 42 as RESET; treat it as EN."); return; }
+        digitalWrite(42, HIGH);
+        if (cE > 100) { Serial.println("[gpsraw] DONE — board behaves like V4.3 R8: GNSS EN is GPIO42 (active LOW). Treat 42 as EN, not RESET."); return; }
+
+        /* Sub-test F: inverted EN — in case this third-party module really is
+         * active HIGH (some generic modules invert Heltec's polarity). */
+        digitalWrite(34, HIGH);
+        delay(1500);
+        Serial.printf("[gpsraw-F] EN=34 HIGH (inverted polarity), RX=38...");
+        Serial2.begin(9600, SERIAL_8N1, 38, 39);
+        uint32_t cF = drain(Serial2);
+        Serial2.end();
+        digitalWrite(34, LOW);
+        if (cF > 100) { Serial.println("[gpsraw] DONE — this module's EN is ACTIVE HIGH. Set GPS_EN_ACTIVE=HIGH in GpsUart."); return; }
 
         Serial.println("[gpsraw] All sub-tests returned no sustained data.");
         Serial.printf("[gpsraw] GPIO38 final level: %s\n", readGPIO38());

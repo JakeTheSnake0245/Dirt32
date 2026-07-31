@@ -8,7 +8,7 @@
 #define PIN_GPS_TX 39       /* CPU -> L76K RX */
 #endif
 #ifndef PIN_GPS_EN
-#define PIN_GPS_EN 34       /* active HIGH — enables VGNSS rail */
+#define PIN_GPS_EN 34       /* VGNSS_Ctrl — ACTIVE LOW (per Meshtastic heltec_v4: GPS_EN_ACTIVE LOW) */
 #endif
 #ifndef PIN_GPS_RESET
 #define PIN_GPS_RESET 42    /* LOW > 100 ms resets */
@@ -21,13 +21,14 @@
 static HardwareSerial &gpsSerial = Serial1;
 
 void GpsUart::powerOn() {
-    /* Heltec V4.3 documented GNSS method — nothing more:
-     *   EN (GPIO34) HIGH  = VGNSS rail on
+    /* Heltec V4.3 GNSS power-on, polarity per Meshtastic's field-proven
+     * heltec_v4 variant (GPS_EN_ACTIVE LOW):
+     *   EN / VGNSS_Ctrl (GPIO34) LOW = VGNSS rail ON   (active LOW!)
      *   RESET (GPIO42) HIGH = not in reset (no pulse; L76K self-starts)
      * L76K needs ~1 s after power-on before first NMEA sentence appears. */
     pinMode(PIN_GPS_EN, OUTPUT);
     pinMode(PIN_GPS_RESET, OUTPUT);
-    digitalWrite(PIN_GPS_EN, HIGH);
+    digitalWrite(PIN_GPS_EN, LOW);       /* ACTIVE LOW — LOW = GPS powered */
     digitalWrite(PIN_GPS_RESET, HIGH);
     delay(1000);
     gpsSerial.begin(GPS_BAUD, SERIAL_8N1, PIN_GPS_RX, PIN_GPS_TX);
@@ -37,7 +38,7 @@ void GpsUart::powerOn() {
 
 void GpsUart::powerOff() {
     gpsSerial.end();
-    digitalWrite(PIN_GPS_EN, LOW);        /* cut VGNSS power rail */
+    digitalWrite(PIN_GPS_EN, HIGH);       /* ACTIVE LOW — HIGH = VGNSS rail off */
 }
 
 bool GpsUart::checksumOk(const char *line) {
