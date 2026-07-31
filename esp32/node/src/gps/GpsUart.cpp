@@ -26,7 +26,7 @@ void GpsUart::powerOn() {
     pinMode(PIN_GPS_EN, OUTPUT);
     pinMode(PIN_GPS_STANDBY, OUTPUT);
     pinMode(PIN_GPS_RESET, OUTPUT);
-    digitalWrite(PIN_GPS_EN, LOW);        /* power on (active low) */
+    digitalWrite(PIN_GPS_EN, HIGH);       /* power on (active HIGH on V4) */
     digitalWrite(PIN_GPS_STANDBY, HIGH);  /* force wake */
     digitalWrite(PIN_GPS_RESET, HIGH);    /* not in reset */
     delay(120);                           /* rail settle */
@@ -38,7 +38,7 @@ void GpsUart::powerOn() {
 void GpsUart::powerOff() {
     gpsSerial.end();
     digitalWrite(PIN_GPS_STANDBY, LOW);   /* allow sleep */
-    digitalWrite(PIN_GPS_EN, HIGH);       /* cut power */
+    digitalWrite(PIN_GPS_EN, LOW);        /* cut power */
 }
 
 bool GpsUart::checksumOk(const char *line) {

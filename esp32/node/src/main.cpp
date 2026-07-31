@@ -327,8 +327,8 @@ static void handleCli(String line) {
                        "and re-registration at the gateway.");
     }
     else if (cmd == "screen") dbgScreen.showConfig(cfg, radioOk, rtc_seq);
-    else if (cmd.startsWith("gpstest")) {
-        uint16_t secs = (uint16_t)cmd.substring(7).toInt();
+    else if (cmd == "gpstest") {
+        uint16_t secs = rest.isEmpty() ? 30 : (uint16_t)rest.toInt();
         if (secs == 0) secs = 30;
         Serial.printf("Powering L76K, streaming raw NMEA for %us "
                       "(look for $GxRMC with status 'A')...\n", secs);
