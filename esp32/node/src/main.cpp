@@ -230,7 +230,7 @@ static void goToSleep() {
         86400ULL * 1000000ULL / (cfg.heartbeat_per_day ? cfg.heartbeat_per_day : 1);
     esp_sleep_enable_timer_wakeup(hb_interval_us);
 
-    if (cfg.front_end == FE_ADXL355 && cfg.motion_wake_enable && frontEnd) {
+    if (cfg.front_end == FE_ADXL355 && cfg.motion_wake_enable && frontEnd && sensorOk) {
         int wakePin = frontEnd->armMotionWake(cfg.motion_threshold_g);
         if (wakePin >= 0)
             esp_sleep_enable_ext0_wakeup((gpio_num_t)wakePin, 1);
