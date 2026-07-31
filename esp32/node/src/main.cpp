@@ -521,7 +521,9 @@ void setup() {
     /* Front-end */
     Serial.println("[boot] sensor rail + SPI...");
     vePower(true);
-    SPI.begin();
+    /* Explicit pins prevent SPI from claiming GPIO38 (FSPIWP/GNSS_RX).
+     * Without this, SPI.begin() drives GPIO38 LOW and UART RX never works. */
+    SPI.begin(/*SCK*/9, /*MISO*/11, /*MOSI*/10, /*SS*/-1);
     static Adxl355FrontEnd adxl(SPI, PIN_ADXL_CS, PIN_ADXL_INT1);
     static GeophoneFrontEnd geo(SPI, PIN_ADS_CS, PIN_ADS_DRDY);
     frontEnd = (cfg.front_end == FE_ADXL355)
