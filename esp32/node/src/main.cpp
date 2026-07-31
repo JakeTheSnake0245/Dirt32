@@ -14,6 +14,7 @@
  */
 #include <Arduino.h>
 #include <SPI.h>
+#include <driver/gpio.h>   /* gpio_get_level — used by gpsraw */
 #include "sps_proto.h"
 #include "config.h"
 #include "frontend/FrontEnd.h"
@@ -408,43 +409,76 @@ static void handleCli(String line) {
         ESP.restart();
     }
     else if (cmd == "gpsraw") {
-        /* Factory-exact UART dump — mirrors the Heltec reference code precisely.
-         * Does NOT call powerOff/powerOn; does NOT touch SBY or RST.
-         * If this gets bytes but gpstest doesn't, the issue is in powerOn(). */
-        uint16_t secs = rest.isEmpty() ? 15 : (uint16_t)rest.toInt();
-        if (secs == 0) secs = 15;
-        Serial.printf("[gpsraw] EN=HIGH, delay(500), Serial1 GPIO38/39, %us...\n", secs);
-        pinMode(34, OUTPUT);
-        digitalWrite(34, HIGH);
+        /* Factory-exact UART dump with SPI teardown and GPIO state logging.
+         * Tries three sub-tests in order, stopping at first success:
+         *   A) vanilla (no SPI.end) — Serial1
+         *   B) after SPI.end        — Serial1  (catches SPI holding GPIO38)
+         *   C) after SPI.end        — Serial2  (catches UART1 peripheral issue) */
+        uint16_t secs = rest.isEmpty() ? 10 : (uint16_t)rest.toInt();
+        if (secs == 0) secs = 10;
+
+        auto readGPIO38 = []() -> const char * {
+            /* Read raw digital level without changing pin mode */
+            return gpio_get_level((gpio_num_t)38) ? "HIGH" : "LOW";
+        };
+        auto drain = [&](HardwareSerial &ser) -> uint32_t {
+            uint32_t t0 = millis(), count = 0;
+            uint8_t preview[64]; uint32_t pIdx = 0;
+            while (millis() - t0 < (uint32_t)secs * 1000) {
+                while (ser.available()) {
+                    uint8_t b = (uint8_t)ser.read();
+                    count++;
+                    if (pIdx < sizeof(preview)) preview[pIdx++] = b;
+                }
+                delay(2);
+            }
+            Serial.printf(" bytes=%lu  ", (unsigned long)count);
+            if (pIdx == 0) {
+                Serial.print("(nothing)");
+            } else {
+                uint32_t show = pIdx < 40 ? pIdx : 40;
+                for (uint32_t i = 0; i < show; i++) {
+                    uint8_t b = preview[i];
+                    if (b >= 0x20 && b < 0x7F) Serial.printf("%c", b);
+                    else                        Serial.printf("\\x%02X", b);
+                }
+            }
+            Serial.println();
+            return count;
+        };
+
+        /* EN=HIGH once, held for all sub-tests */
+        pinMode(34, OUTPUT); digitalWrite(34, HIGH);
         delay(500);
+
+        /* Sub-test A: vanilla Serial1 */
+        Serial.printf("[gpsraw-A] GPIO38=%s before open; Serial1, no SPI.end()...",
+                      readGPIO38());
         Serial1.begin(9600, SERIAL_8N1, 38, 39);
-        uint32_t t0 = millis(), count = 0;
-        uint8_t preview[64]; uint32_t pIdx = 0;
-        while (millis() - t0 < (uint32_t)secs * 1000) {
-            while (Serial1.available()) {
-                uint8_t b = (uint8_t)Serial1.read();
-                count++;
-                if (pIdx < sizeof(preview)) preview[pIdx++] = b;
-            }
-            delay(2);
-        }
+        uint32_t cA = drain(Serial1);
         Serial1.end();
-        Serial.printf("[gpsraw] bytes=%lu  ", (unsigned long)count);
-        if (pIdx > 0) {
-            uint32_t show = pIdx < 48 ? pIdx : 48;
-            for (uint32_t i = 0; i < show; i++) {
-                uint8_t b = preview[i];
-                if (b >= 0x20 && b < 0x7F) Serial.printf("%c", b);
-                else                        Serial.printf("\\x%02X", b);
-            }
-        } else {
-            Serial.print("(nothing)");
-        }
-        Serial.println();
-        if (count == 0) {
-            Serial.println("[gpsraw] Still zero — likely a board variant pin conflict.");
-            Serial.println("  Try: SPI.end() before gpsraw, or use Serial2 instead of Serial1.");
-        }
+        if (cA > 0) { Serial.println("[gpsraw] DONE — Serial1 works as-is."); return; }
+
+        /* Sub-test B: SPI.end() then Serial1 */
+        SPI.end();
+        delay(10);
+        Serial.printf("[gpsraw-B] GPIO38=%s after SPI.end(); Serial1...", readGPIO38());
+        Serial1.begin(9600, SERIAL_8N1, 38, 39);
+        uint32_t cB = drain(Serial1);
+        Serial1.end();
+        if (cB > 0) { Serial.println("[gpsraw] DONE — SPI was holding GPIO38. Adding SPI.end() to powerOn() will fix this."); return; }
+
+        /* Sub-test C: SPI.end() then Serial2 (different UART peripheral) */
+        Serial.printf("[gpsraw-C] GPIO38=%s; Serial2...", readGPIO38());
+        Serial2.begin(9600, SERIAL_8N1, 38, 39);
+        uint32_t cC = drain(Serial2);
+        Serial2.end();
+        if (cC > 0) { Serial.println("[gpsraw] DONE — UART1 (Serial1) is broken; use Serial2 for GPS."); return; }
+
+        Serial.println("[gpsraw] All three sub-tests returned zero.");
+        Serial.printf("[gpsraw] GPIO38 final level: %s\n", readGPIO38());
+        Serial.println("  GPIO38 reads LOW  → pin is being driven LOW by the board (SPI MISO pull-down or short).");
+        Serial.println("  GPIO38 reads HIGH → pin is floating or pulled up; L76K TX may be disconnected from this GPIO.");
     }
     else if (cmd == "sleep") goToSleep();
     else if (cmd == "reboot") ESP.restart();
