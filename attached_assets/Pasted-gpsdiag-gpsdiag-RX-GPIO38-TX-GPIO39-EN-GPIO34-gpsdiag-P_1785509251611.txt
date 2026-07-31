@@ -1,0 +1,49 @@
+gpsdiag
+[gpsdiag] RX=GPIO38  TX=GPIO39  EN=GPIO34
+[gpsdiag] Phase 1/3: EN=HIGH (Heltec V4 expected: HIGH=on)
+[gpsdiag] EN=HIGH                 bytes=1      \xC0
+[gpsdiag] Phase 2/3: EN floating
+[gpsdiag] EN=float                bytes=0      (nothing)
+[gpsdiag] Phase 3/3: EN=LOW (should kill power)
+[gpsdiag] EN=LOW                  bytes=0      (nothing)
+[gpsdiag] ---
+[gpsdiag] RESULT: EN=HIGH powers module (correct for Heltec V4).
+[gpsdiag] Baud scan (EN=HIGH, 10s each) — looking for printable NMEA...
+[gpsdiag]   4800 baud: bytes=0      printable=0%  
+[gpsdiag]   9600 baud: bytes=0      printable=0%  
+[gpsdiag]  19200 baud: bytes=0      printable=0%  
+[gpsdiag]  38400 baud: bytes=0      printable=0%  
+[gpsdiag]  57600 baud: bytes=0      printable=0%  
+[gpsdiag] 115200 baud: bytes=0      printable=0%  
+[gpsdiag] done. The baud rate with ~100% printable and '$' in preview is correct.
+gpsdiag
+[gpsdiag] RX=GPIO38  TX=GPIO39  EN=GPIO34
+[gpsdiag] Phase 1/3: EN=HIGH (Heltec V4 expected: HIGH=on)
+[gpsdiag] EN=HIGH                 bytes=0      (nothing)
+[gpsdiag] Phase 2/3: EN floating
+[gpsdiag] EN=float                bytes=0      (nothing)
+[gpsdiag] Phase 3/3: EN=LOW (should kill power)
+[gpsdiag] EN=LOW                  bytes=0      (nothing)
+[gpsdiag] ---
+[gpsdiag] RESULT: zero bytes in all phases — GPS module not present or GPIO38 unwired.
+gpsdiagDisconnected (read failed: [Errno 6] Device not configured)
+Reconnecting to /dev/cu.usbmodem1101 ..  Connected!
+gpsdiag
+unknown command — try `help`
+gpsdiag
+[gpsdiag] RX=GPIO38  TX=GPIO39  EN=GPIO34
+[gpsdiag] Phase 1/3: EN=HIGH (Heltec V4 expected: HIGH=on)
+[gpsdiag] EN=HIGH                 bytes=0      (nothing)
+[gpsdiag] Phase 2/3: EN floating
+[gpsdiag] EN=float                bytes=0      (nothing)
+[gpsdiag] Phase 3/3: EN=LOW (should kill power)
+[gpsdiag] EN=LOW                  bytes=0      (nothing)
+[gpsdiag] ---
+[gpsdiag] RESULT: zero bytes in all phases — GPS module not present or GPIO38 unwired.
+[deploy] TAP — sending deploy heartbeat...
+[gps] 10s elapsed — NO NMEA received (wiring/power issue?)
+[gps] 20s elapsed — NO NMEA received (wiring/power issue?)
+[gps] 30s elapsed — NO NMEA received (wiring/power issue?)
+[gps] 40s elapsed — NO NMEA received (wiring/power issue?)
+[gps] 50s elapsed — NO NMEA received (wiring/power issue?)
+[gps] timeout after 60s — 0 sentences rx, no fix
