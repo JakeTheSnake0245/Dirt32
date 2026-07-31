@@ -408,13 +408,16 @@ static void handleCli(String line) {
         ESP.restart();
     }
     else if (cmd == "gpsraw") {
-        /* Factory-exact UART dump with SPI teardown and GPIO state logging.
-         * Tries sub-tests in order, stopping at first SUSTAINED (>100 byte) success:
-         *   A) vanilla (no SPI.end) — Serial1
-         *   B) after SPI.end        — Serial1  (catches SPI holding GPIO38)
-         *   C) after SPI.end        — Serial2  (catches UART peripheral issue)
-         *   D) swapped pins RX=39   — Serial2  (catches TX/RX orientation swap)
-         *   E) EN on GPIO42 held HIGH — Serial2 (catches V4.3 R8 revision pin map) */
+        /* Low-level UART dump with SPI teardown and GPIO state logging.
+         * Canonical pin map (Heltec official V4 example): RX=39, TX=38,
+         * EN=34 ACTIVE LOW. Sub-tests run in order, stopping at first
+         * SUSTAINED (>100 byte) success:
+         *   A) canonical RX=39 — Serial1 (no SPI.end)
+         *   B) after SPI.end   — Serial1 RX=39 (catches SPI pin clamping)
+         *   C) after SPI.end   — Serial2 RX=39 (catches UART peripheral issue)
+         *   D) swapped RX=38   — Serial2 (catches reversed TX/RX orientation)
+         *   E) EN on GPIO42 LOW — Serial2 RX=39 (catches V4.3 R8 pin map)
+         *   F) EN=34 HIGH       — Serial2 RX=39 (catches inverted-EN module) */
         uint16_t secs = rest.isEmpty() ? 10 : (uint16_t)rest.toInt();
         if (secs == 0) secs = 10;
 
@@ -453,26 +456,30 @@ static void handleCli(String line) {
         pinMode(34, OUTPUT); digitalWrite(34, LOW);
         delay(1500);   /* L76K cold boot after power-up */
 
-        /* Sub-test A: vanilla Serial1 */
-        Serial.printf("[gpsraw-A] GPIO38=%s before open; Serial1, no SPI.end()...",
-                      readGPIO38());
-        Serial1.begin(9600, SERIAL_8N1, 38, 39);
+        auto readGPIO39 = []() -> const char * {
+            return gpio_get_level((gpio_num_t)39) ? "HIGH" : "LOW";
+        };
+
+        /* Sub-test A: canonical Serial1 RX=39/TX=38 */
+        Serial.printf("[gpsraw-A] GPIO39=%s before open; Serial1 RX=39, no SPI.end()...",
+                      readGPIO39());
+        Serial1.begin(9600, SERIAL_8N1, 39, 38);
         uint32_t cA = drain(Serial1);
         Serial1.end();
-        if (cA > 0) { Serial.println("[gpsraw] DONE — Serial1 works as-is."); return; }
+        if (cA > 100) { Serial.println("[gpsraw] DONE — canonical pin map works (RX=39/TX=38, EN=34 LOW)."); return; }
 
         /* Sub-test B: SPI.end() then Serial1 */
         SPI.end();
         delay(10);
-        Serial.printf("[gpsraw-B] GPIO38=%s after SPI.end(); Serial1...", readGPIO38());
-        Serial1.begin(9600, SERIAL_8N1, 38, 39);
+        Serial.printf("[gpsraw-B] GPIO39=%s after SPI.end(); Serial1 RX=39...", readGPIO39());
+        Serial1.begin(9600, SERIAL_8N1, 39, 38);
         uint32_t cB = drain(Serial1);
         Serial1.end();
-        if (cB > 0) { Serial.println("[gpsraw] DONE — SPI was holding GPIO38. Adding SPI.end() to powerOn() will fix this."); return; }
+        if (cB > 100) { Serial.println("[gpsraw] DONE — SPI was clamping a GPS pin. Check SPI.begin() uses explicit pins (9,11,10)."); return; }
 
-        /* Sub-test C: SPI.end() then Serial2 (different UART peripheral) */
-        Serial.printf("[gpsraw-C] GPIO38=%s; Serial2...", readGPIO38());
-        Serial2.begin(9600, SERIAL_8N1, 38, 39);
+        /* Sub-test C: Serial2 (different UART peripheral) */
+        Serial.printf("[gpsraw-C] GPIO39=%s; Serial2 RX=39...", readGPIO39());
+        Serial2.begin(9600, SERIAL_8N1, 39, 38);
         uint32_t cC = drain(Serial2);
         Serial2.end();
         /* A handful of bytes is a pin-matrix glitch, not NMEA (9600 baud NMEA
@@ -480,19 +487,19 @@ static void handleCli(String line) {
         if (cC > 100) { Serial.println("[gpsraw] DONE — sustained data on Serial2 but not Serial1 (unexpected; verify)."); return; }
         if (cC > 0)   Serial.printf("[gpsraw-C] %lu stray byte(s) — likely glitch, not NMEA. Continuing.\n", (unsigned long)cC);
 
-        /* Sub-test D: TX/RX swapped (module TX may land on GPIO39) */
-        Serial.printf("[gpsraw-D] swapped pins — Serial2 RX=39 TX=38...");
-        Serial2.begin(9600, SERIAL_8N1, 39, 38);
+        /* Sub-test D: reversed orientation — module TX on GPIO38 instead */
+        Serial.printf("[gpsraw-D] reversed pins — Serial2 RX=38 TX=39...");
+        Serial2.begin(9600, SERIAL_8N1, 38, 39);
         uint32_t cD = drain(Serial2);
         Serial2.end();
-        if (cD > 100) { Serial.println("[gpsraw] DONE — TX/RX are SWAPPED: module TX is on GPIO39. Set PIN_GPS_RX=39, PIN_GPS_TX=38."); return; }
+        if (cD > 100) { Serial.println("[gpsraw] DONE — TX/RX are REVERSED from canonical: module TX is on GPIO38. Set PIN_GPS_RX=38, PIN_GPS_TX=39."); return; }
 
         /* Sub-test E: V4.3 R8 revision — GNSS enable moves to GPIO42
          * (also ACTIVE LOW per Meshtastic heltec_v4_r8). */
         pinMode(42, OUTPUT); digitalWrite(42, LOW);
         delay(1500);   /* module cold boot after possible power cycling */
-        Serial.printf("[gpsraw-E] R8 pin map — EN on GPIO42 held LOW, RX=38...");
-        Serial2.begin(9600, SERIAL_8N1, 38, 39);
+        Serial.printf("[gpsraw-E] R8 pin map — EN on GPIO42 held LOW, RX=39...");
+        Serial2.begin(9600, SERIAL_8N1, 39, 38);
         uint32_t cE = drain(Serial2);
         Serial2.end();
         digitalWrite(42, HIGH);
@@ -502,17 +509,17 @@ static void handleCli(String line) {
          * active HIGH (some generic modules invert Heltec's polarity). */
         digitalWrite(34, HIGH);
         delay(1500);
-        Serial.printf("[gpsraw-F] EN=34 HIGH (inverted polarity), RX=38...");
-        Serial2.begin(9600, SERIAL_8N1, 38, 39);
+        Serial.printf("[gpsraw-F] EN=34 HIGH (inverted polarity), RX=39...");
+        Serial2.begin(9600, SERIAL_8N1, 39, 38);
         uint32_t cF = drain(Serial2);
         Serial2.end();
         digitalWrite(34, LOW);
-        if (cF > 100) { Serial.println("[gpsraw] DONE — this module's EN is ACTIVE HIGH. Set GPS_EN_ACTIVE=HIGH in GpsUart."); return; }
+        if (cF > 100) { Serial.println("[gpsraw] DONE — this module's EN is ACTIVE HIGH. Flip the EN writes in GpsUart::powerOn/powerOff."); return; }
 
         Serial.println("[gpsraw] All sub-tests returned no sustained data.");
-        Serial.printf("[gpsraw] GPIO38 final level: %s\n", readGPIO38());
-        Serial.println("  GPIO38 reads LOW  → pin is being driven LOW by the board (SPI MISO pull-down or short).");
-        Serial.println("  GPIO38 reads HIGH → pin is floating or pulled up; L76K TX may be disconnected from this GPIO.");
+        Serial.printf("[gpsraw] Final levels: GPIO39=%s GPIO38=%s\n", readGPIO39(), readGPIO38());
+        Serial.println("  RX pin LOW  → pin is being driven LOW by the board (peripheral clamp or short).");
+        Serial.println("  RX pin HIGH → pin floating/pulled up; module TX may be disconnected (check cable seating).");
     }
     else if (cmd == "sleep") goToSleep();
     else if (cmd == "reboot") ESP.restart();
