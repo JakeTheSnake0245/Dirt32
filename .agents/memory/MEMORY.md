@@ -1,2 +1,3 @@
 - [SPS firmware decisions](sps-firmware-decisions.md) — SEQ write-ahead nonce-safety scheme, no-wrap/rekey rule, exact dedupe pairs, single-shot heartbeats, host tests as contract gate.
 - [Dirt32 gateway decisions](dirt32-gateway-decisions.md) — bridge holds no keys, Pi daemon is stdlib-only Python, C↔Python vector tests are the compat contract, /gw/ not /api/ in preview.
+- [Heltec V4 L76K GPS EN pin](gps-en-pin.md) — GPIO34 is active HIGH (not LOW); wrong polarity = zero NMEA output.
