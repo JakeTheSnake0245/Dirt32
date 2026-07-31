@@ -396,27 +396,62 @@ static void handleCli(String line) {
             return count;
         };
 
-        Serial.println("[gpsdiag] Phase 1/3: EN floating (is module self-powered?)");
+        /* Phase 1: confirm module is always powered with EN floating */
+        Serial.println("[gpsdiag] Phase 1/3: EN floating (module always powered?)");
         uint32_t c1 = probe("EN=float",  false, /*float*/true);
-        Serial.println("[gpsdiag] Phase 2/3: EN=LOW (original active-low theory)");
+        Serial.println("[gpsdiag] Phase 2/3: EN=LOW");
         uint32_t c2 = probe("EN=LOW",    false, false);
-        Serial.println("[gpsdiag] Phase 3/3: EN=HIGH (active-high theory)");
+        Serial.println("[gpsdiag] Phase 3/3: EN=HIGH");
         uint32_t c3 = probe("EN=HIGH",   true,  false);
 
         Serial.println("[gpsdiag] ---");
         if (c1 == 0 && c2 == 0 && c3 == 0) {
-            Serial.println("[gpsdiag] RESULT: zero bytes in all three phases.");
-            Serial.println("  Likely causes:");
-            Serial.println("  1. GPS add-on module not physically installed.");
-            Serial.println("  2. GPIO38 is not connected to L76K TX on this board variant.");
-            Serial.println("  3. Module requires a hard reset pulse — unlikely but possible.");
-        } else if (c1 > 0) {
-            Serial.println("[gpsdiag] RESULT: data with EN floating — module is always powered.");
-        } else if (c2 > 0) {
-            Serial.println("[gpsdiag] RESULT: data with EN=LOW — active-LOW polarity confirmed.");
-        } else if (c3 > 0) {
-            Serial.println("[gpsdiag] RESULT: data with EN=HIGH — active-HIGH polarity confirmed.");
+            Serial.println("[gpsdiag] RESULT: zero bytes in all phases — GPS module not present or GPIO38 unwired.");
+            return;
         }
+        if (c1 > 0)
+            Serial.println("[gpsdiag] RESULT: module always powered (EN pin has no effect or is unconnected).");
+        else if (c2 > 0)
+            Serial.println("[gpsdiag] RESULT: EN=LOW powers module.");
+        else
+            Serial.println("[gpsdiag] RESULT: EN=HIGH powers module.");
+
+        /* Phase 2: baud rate scan (EN floating, 10 s each) — find the one that
+         * gives printable ASCII so we know what to use in GpsUart */
+        Serial.println("[gpsdiag] Baud scan (EN float, 10s each) — looking for printable NMEA...");
+        const uint32_t bauds[] = { 4800, 9600, 19200, 38400, 57600, 115200 };
+        for (uint32_t b : bauds) {
+            pinMode(EN_PIN, INPUT);
+            pinMode(SBY_PIN, OUTPUT); digitalWrite(SBY_PIN, HIGH);
+            pinMode(RST_PIN, OUTPUT); digitalWrite(RST_PIN, HIGH);
+            delay(100);
+            Serial2.begin(b, SERIAL_8N1, RX_PIN, TX_PIN);
+            delay(50);
+            uint32_t t0 = millis(), total = 0, printable = 0;
+            uint8_t preview[48]; uint32_t pIdx = 0;
+            while (millis() - t0 < 10000) {
+                while (Serial2.available()) {
+                    uint8_t byt = (uint8_t)Serial2.read();
+                    total++;
+                    if (byt >= 0x20 && byt < 0x7F) printable++;
+                    if (pIdx < sizeof(preview)) preview[pIdx++] = byt;
+                }
+                delay(2);
+            }
+            Serial2.end();
+            Serial.printf("[gpsdiag] %6lu baud: bytes=%-5lu  printable=%lu%%  ",
+                          b, (unsigned long)total,
+                          total ? (unsigned long)(printable * 100 / total) : 0UL);
+            uint32_t show = pIdx < 24 ? pIdx : 24;
+            for (uint32_t i = 0; i < show; i++) {
+                if (preview[i] >= 0x20 && preview[i] < 0x7F)
+                    Serial.printf("%c", preview[i]);
+                else
+                    Serial.printf("\\x%02X", preview[i]);
+            }
+            Serial.println();
+        }
+        Serial.println("[gpsdiag] done. The baud rate with ~100% printable and '$' in preview is correct.");
     }
     else if (cmd == "sleep") goToSleep();
     else if (cmd == "reboot") ESP.restart();

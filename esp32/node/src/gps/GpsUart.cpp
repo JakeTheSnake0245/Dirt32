@@ -23,14 +23,17 @@
 static HardwareSerial &gpsSerial = Serial1;
 
 void GpsUart::powerOn() {
-    pinMode(PIN_GPS_EN, OUTPUT);
+    /* EN pin (GPIO34) is NOT driven — diagnostics show the L76K is always
+     * powered from VCC; driving EN either way suppresses UART output, so
+     * we leave it as INPUT (floating).  Only standby and reset are needed. */
+    pinMode(PIN_GPS_EN, INPUT);           /* hands off — always powered */
     pinMode(PIN_GPS_STANDBY, OUTPUT);
     pinMode(PIN_GPS_RESET, OUTPUT);
-    digitalWrite(PIN_GPS_EN, HIGH);       /* power on (active HIGH on V4) */
     digitalWrite(PIN_GPS_STANDBY, HIGH);  /* force wake */
     digitalWrite(PIN_GPS_RESET, HIGH);    /* not in reset */
-    delay(120);                           /* rail settle */
+    delay(200);                           /* rail settle (extra margin) */
     gpsSerial.begin(GPS_BAUD, SERIAL_8N1, PIN_GPS_RX, PIN_GPS_TX);
+    delay(50);                            /* UART settle */
     _len = 0;
     _partial = GpsFixResult{};
 }
@@ -38,7 +41,7 @@ void GpsUart::powerOn() {
 void GpsUart::powerOff() {
     gpsSerial.end();
     digitalWrite(PIN_GPS_STANDBY, LOW);   /* allow sleep */
-    digitalWrite(PIN_GPS_EN, LOW);        /* cut power */
+    /* EN left as INPUT — module stays on VCC, standby controls quiescent draw */
 }
 
 bool GpsUart::checksumOk(const char *line) {
