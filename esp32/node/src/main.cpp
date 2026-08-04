@@ -662,6 +662,27 @@ void setup() {
 }
 
 void loop() {
+    /* Sensor liveness watchdog: for the first 30 s after boot, silently
+     * probe the front-end every 250 ms and print ONLY when it changes
+     * state — pinpoints the exact moment the bus dies without the user
+     * having to type anything. */
+    static uint32_t wdLast = 0;
+    static bool wdState = true, wdDone = false;
+    if (!wdDone && sensorOk && frontEnd && millis() - wdLast >= 250) {
+        wdLast = millis();
+        bool ok = frontEnd->alive();
+        if (ok != wdState) {
+            Serial.printf("[sensor-watchdog %8lums] sensor %s\n",
+                          (unsigned long)millis(), ok ? "RECOVERED" : "DIED");
+            wdState = ok;
+        }
+        if (millis() > 30000) {
+            wdDone = true;
+            Serial.printf("[sensor-watchdog] 30s done — sensor %s\n",
+                          wdState ? "still alive" : "dead");
+        }
+    }
+
     static String lineBuf;
     while (Serial.available()) {
         char c = (char)Serial.read();

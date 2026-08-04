@@ -17,6 +17,7 @@ public:
     int armMotionWake(float) override { return -1; }
     bool selfTest() override;
     bool probe() override;
+    bool alive() override;
     void powerDown() override;
 
 private:

@@ -97,6 +97,11 @@ bool GeophoneFrontEnd::probe() {
     return n > 0;
 }
 
+bool GeophoneFrontEnd::alive() {
+    int16_t buf[4];
+    return read(buf, 4) > 0;
+}
+
 void GeophoneFrontEnd::powerDown() {
     cmd(CMD_POWERDOWN);
 }

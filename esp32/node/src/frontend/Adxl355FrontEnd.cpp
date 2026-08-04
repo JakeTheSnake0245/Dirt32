@@ -147,6 +147,18 @@ bool Adxl355FrontEnd::selfTest() {
     return delta > 400;
 }
 
+/* ID read at an arbitrary SPI clock — used to distinguish a marginal
+ * signal (works slow, fails fast) from a genuinely dead chip. */
+uint8_t Adxl355FrontEnd::regAt(uint8_t addr, uint32_t hz) {
+    _spi.beginTransaction(SPISettings(hz, MSBFIRST, SPI_MODE0));
+    digitalWrite(_cs, LOW);
+    _spi.transfer((addr << 1) | 0x01);
+    uint8_t v = _spi.transfer(0x00);
+    digitalWrite(_cs, HIGH);
+    _spi.endTransaction();
+    return v;
+}
+
 bool Adxl355FrontEnd::probe() {
     uint8_t devid = reg(REG_DEVID_AD);
     uint8_t partid = reg(REG_PARTID);
@@ -154,7 +166,26 @@ bool Adxl355FrontEnd::probe() {
     Serial.printf("[probe %8lums] DEVID_AD=0x%02X PARTID=0x%02X %s\n",
                   (unsigned long)millis(), devid, partid,
                   ok ? "OK" : "FAIL");
+    if (!ok) {
+        /* Retry at slower clocks: recovery here = signal-integrity problem
+         * at 5 MHz (long jumpers/breadboard), not a dead chip. */
+        static const uint32_t slow[] = { 1000000, 100000 };
+        for (uint32_t hz : slow) {
+            uint8_t d = regAt(REG_DEVID_AD, hz);
+            uint8_t p = regAt(REG_PARTID, hz);
+            Serial.printf("         retry @%lukHz: 0x%02X/0x%02X %s\n",
+                          (unsigned long)(hz / 1000), d, p,
+                          (d == 0xAD && p == 0xED) ? "OK <- marginal signal at 5MHz!"
+                                                   : "FAIL");
+            if (d == 0xAD && p == 0xED) return false;
+        }
+    }
     return ok;
+}
+
+/* Silent liveness check — no serial output. Used by the boot watchdog. */
+bool Adxl355FrontEnd::alive() {
+    return reg(REG_DEVID_AD) == 0xAD && reg(REG_PARTID) == 0xED;
 }
 
 void Adxl355FrontEnd::powerDown() {

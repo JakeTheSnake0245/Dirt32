@@ -34,6 +34,10 @@ public:
        some time after boot. Returns true if the chip answered correctly. */
     virtual bool probe() = 0;
 
+    /* Silent version of probe() — no serial output. Used for high-rate
+       background liveness monitoring. */
+    virtual bool alive() = 0;
+
     /* Quiesce the chip before Ve is cut. */
     virtual void powerDown() = 0;
 };

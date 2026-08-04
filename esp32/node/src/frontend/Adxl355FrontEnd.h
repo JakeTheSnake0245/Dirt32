@@ -17,10 +17,12 @@ public:
     int armMotionWake(float threshold_g) override;
     bool selfTest() override;
     bool probe() override;
+    bool alive() override;
     void powerDown() override;
 
 private:
     uint8_t  reg(uint8_t addr);
+    uint8_t  regAt(uint8_t addr, uint32_t hz);
     void     regWrite(uint8_t addr, uint8_t val);
     void     burstRead(uint8_t addr, uint8_t *buf, size_t n);
 
