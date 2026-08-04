@@ -161,10 +161,12 @@ class Ingest:
               "lon_e7": hb.lon_e7, "health_flags": hb.health_flags,
               "noise_floor": hb.noise_floor, "rssi": rssi, "snr": snr}
         deploy = bool(hb.health_flags & proto.HF_DEPLOY)
+        gps_fix = bool(hb.health_flags & proto.HF_GPS_FIX)
+        pos = (f" lat={hb.lat_e7/1e7:.5f} lon={hb.lon_e7/1e7:.5f}"
+               f" ({'gps' if gps_fix else 'fallback'})"
+               if (hb.lat_e7 or hb.lon_e7) else " pos=none")
         self.log(f"[{'DEPLOY' if deploy else 'hb'}] node={hdr.node_id} "
-                 f"batt={hb.battery_mv}mV flags={hb.health_flags:#04x}"
-                 + (f" lat={hb.lat_e7/1e7:.5f} lon={hb.lon_e7/1e7:.5f}"
-                    if deploy else ""))
+                 f"batt={hb.battery_mv}mV flags={hb.health_flags:#04x}{pos}")
         if self.mqtt:
             self.mqtt.publish(f"dirt32/heartbeat/{hdr.node_id}", ev)
         self.on_event("heartbeat", ev)

@@ -133,8 +133,9 @@ matching Heltec's official V4 GPS example: UART RX = GPIO39, TX = GPIO38
 - On a fix, the heartbeat carries real coordinates and the node's clock is
   synced to UTC, so alert timestamps are real time from then on.
 - No fix (buried antenna, cold start, no sky view) → falls back to the
-  provisioned `fallback_lat_e7`/`fallback_lon_e7`
-  (`set fallback_lat_e7 407128000` = 40.7128000°N). For buried nodes,
+  provisioned fallback position, set in plain decimal degrees:
+  `set fallback_lat 40.7128` / `set fallback_lon -74.0060`
+  (verify with `show` — it prints them back in degrees). For buried nodes,
   setting the fallback and `set gps_enable 0` saves the 60 s fix budget
   every beat — position doesn't change once planted.
 - Bench check: `gpstest` streams raw NMEA for 30 s (you should see
