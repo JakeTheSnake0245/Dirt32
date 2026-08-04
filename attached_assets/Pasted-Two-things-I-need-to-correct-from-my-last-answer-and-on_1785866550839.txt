@@ -1,0 +1,26 @@
+Two things I need to correct from my last answer, and one is important for your board specifically.
+
+On the V4, GPIO9/10/11 aren't general free header pins — they're the LoRa radio's dedicated SPI bus (SCK/MOSI/MISO to the SX1262). The V4 datasheet is explicit that LoRa and Flash each use a separate SPI interface. That's exactly why you can't find them sitting on the headers as obvious free pins — they're tied to the on-board radio. Your firmware shares that bus by design (radio on CS=GPIO8, ADXL on CS=GPIO47), which is electrically valid, but it means you have to physically tap those three radio-SPI nets. Let me pull the exact header positions.
+
+Investigated V4 pin constraints and reconciled ADXL355 connectivity options
+Investigated V4 pin constraints and reconciled ADXL355 connectivity options
+
+I found exactly why you can't locate them — and it's a real problem with the current firmware, not just a labeling thing. I pulled the official V4 datasheet header tables. GPIO9, 10, and 11 are not present on J2, J3, or the aux header at all. They're routed internally to the SX1262, since on the V4 the LoRa and Flash each use a separate, dedicated SPI interface. So there is no pad anywhere on the board to wire the ADXL's SCK/MOSI/MISO to.
+
+That breaks the current plan: your firmware puts the sensor on the same SCK9/MOSI10/MISO11 as the radio (multidrop with separate CS), which works only if those nets reach a solderable pad — and on the V4 they don't. That pin choice looks like it was carried over from the V3, where the layout was different. So selftest will never see the ADXL over SPI as wired today, no matter how you connect it.
+
+Here's what the V4 headers actually expose, for the pins your ADXL build does use (from the datasheet J2/J3 tables):
+
+Signal	GPIO	Physical location
+Ve (VDD + VDDIO power)	—	J2 pin 3 or 4 (both are Ve, switched 3.3 V out)
+GND	—	J2 pin 1 (or J3 pin 1)
+CS	GPIO47	J2 pin 13
+INT1	GPIO6	J3 pin 17
+SCK / MOSI / MISO	9/10/11	not on any header ← the problem
+
+(Ve is switched by GPIO36 internally — to enable Ve you pull GPIO36 low, which settles that polarity question from earlier: active-low, so you'll want -DVE_ACTIVE_LOW in your build flags.)
+
+The fix: give the ADXL355 its own bus on exposed pins. Two clean ways:
+
+Dedicated SPI on the freed geophone pins. On an ADXL-only node you're not using the ADS1220, so its pins open up. Reassign: SCK → GPIO48 (J2 pin 14), MISO → GPIO4 (J3 pin 15), MOSI → GPIO45 (J3 pin 6), keep CS → GPIO47 (J2.13), INT1 → GPIO6 (J3.17). Keeps your SPI driver; just changes pins in platformio.ini/SPI.begin. (GPIO45 is a boot-strapping pin — fine as a data line since the sensor's unpowered at reset, just don't add a strong pull to it.)
+Switch the ADXL to I2C and share the OLED bus — SDA → GPIO17, SCL → GPIO18 (the aux header), plus Ve/GND/INT1. Only two signal wires, no pin-crunch, no strapping-pin caveat. The ADXL355's I2C address (0x1D/0x53) doesn't collide with the OLED (0x3C), and I2C is plenty fast for 250–500 Hz. Downside: it's a driver change from SPI to I2C.
