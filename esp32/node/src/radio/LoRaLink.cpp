@@ -1,6 +1,15 @@
 #include "LoRaLink.h"
 #include <esp_random.h>
 
+/* RX-done flag set by the SX1262 DIO1 interrupt. Polling getPacketLength()
+ * is NOT a valid new-packet test: GET_RX_BUFFER_STATUS on SX126x is never
+ * cleared by readData, so after the first packet it stays nonzero forever
+ * and the ACK window re-reads the stale first ACK (replay-rejected) instead
+ * of ever seeing a new one — "ACK works exactly once". Same bug was already
+ * fixed in the gateway-bridge; this is the node-side fix. */
+static volatile bool s_rxDone = false;
+static void IRAM_ATTR onAckRxDone() { s_rxDone = true; }
+
 bool LoRaLink::begin(const NodeConfig &cfg) {
     _cfg = &cfg;
     sps_replay_init(&_ackReplay, 8);
@@ -25,11 +34,13 @@ bool LoRaLink::waitForAck(uint32_t seq, uint16_t window_ms) {
     uint8_t buf[SPS_MAX_FRAME];
     uint32_t deadline = millis() + window_ms;
 
+    s_rxDone = false;
+    _radio->setDio1Action(onAckRxDone);
     _radio->startReceive();
     while ((int32_t)(deadline - millis()) > 0) {
-        /* Poll for packet (IRQ-driven wake would save power; fine for v1) */
-        if (_radio->getPacketLength(false) == 0) { delay(5); continue; }
-        int len = _radio->getPacketLength(false);
+        if (!s_rxDone) { delay(5); continue; }
+        s_rxDone = false;
+        int len = _radio->getPacketLength();  /* fresh read right after IRQ */
         if (len <= 0 || (size_t)len > sizeof(buf)) { _radio->startReceive(); continue; }
         int state = _radio->readData(buf, len);
         if (state != RADIOLIB_ERR_NONE) { _radio->startReceive(); continue; }
@@ -55,11 +66,13 @@ bool LoRaLink::waitForAck(uint32_t seq, uint16_t window_ms) {
         sps_ack_t ack;
         sps_ack_read(pl, &ack);
         if (ack.ack_seq == (seq & 0xFFFFFFu)) {
+            _radio->clearDio1Action();
             _radio->standby();
             return true;
         }
         _radio->startReceive();
     }
+    _radio->clearDio1Action();
     _radio->standby();
     return false;
 }
