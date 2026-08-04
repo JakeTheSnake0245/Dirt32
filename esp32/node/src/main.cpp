@@ -15,6 +15,7 @@
 #include <Arduino.h>
 #include <SPI.h>
 #include <driver/gpio.h>   /* gpio_get_level — used by gpsraw */
+#include <esp_idf_version.h>
 #include "sps_proto.h"
 #include "config.h"
 #include "frontend/FrontEnd.h"
@@ -340,8 +341,26 @@ static void handleCli(String line) {
                       (unsigned long)secs);
         if (!frontEnd) { Serial.println("no front-end"); return; }
         uint32_t t0 = millis();
+        bool wasOk = true;
         while (millis() - t0 < secs * 1000) {
-            frontEnd->probe();
+            bool ok = frontEnd->probe();
+            if (!ok && wasOk) {
+                /* First failure: bisect firmware vs hardware. */
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 4, 4)
+                Serial.println("[sensorid] dumping sensor-pin GPIO config:");
+                uint64_t mask = (1ULL << PIN_SENS_SCK) | (1ULL << PIN_SENS_MISO) |
+                                (1ULL << PIN_SENS_MOSI) | (1ULL << PIN_ADXL_CS) |
+                                (1ULL << PIN_ADXL_INT1);
+                gpio_dump_io_configuration(stdout, mask);
+#endif
+                Serial.println("[sensorid] attempting live driver re-init...");
+                bool r = frontEnd->begin(cfg.sample_rate_hz);
+                Serial.printf("[sensorid] re-init %s\n",
+                              r ? "RECOVERED -> firmware is disturbing the bus/pins"
+                                : "FAILED -> sensor lost power or a wire (hardware side)");
+                ok = r;
+            }
+            wasOk = ok;
             delay(1000);
         }
         Serial.println("[sensorid] done");
