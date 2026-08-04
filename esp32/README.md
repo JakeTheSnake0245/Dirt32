@@ -320,24 +320,39 @@ number); each device gets its own chip-select.
 
 ### Option A — ADXL355 (digital, SPI) — recommended first
 
-| ADXL355 pin | V4 pin | Notes |
-|-------------|--------|-------|
-If you have the **EVAL-ADXL355-PMDZ** eval board (12-pin Pmod header:
-top row 1-6, bottom row 7-12, pin 1 at the keyed/notched corner — but
-always confirm against the tiny silk labels on the board edge):
+The sensor is the **EVAL-ADXL355-PMDZ** eval board (12-pin Pmod header:
+top row 1–6, bottom row 7–12, pin 1 at the keyed/notched corner). Full
+header, in PMDZ pin order:
 
-| PMDZ pin | Signal | Chip GPIO | Header position | Notes |
-|----------|--------|-----------|-----------------|-------|
-| 6 (+12)  | VDD    | Ve rail   | J2, 3rd or 4th  | switched 3.3 V — powered down during sleep |
-| 5 (+11)  | GND    | GND       | J2, 1st         | |
-| 4        | SCLK   | GPIO48    | J2, 14th        | sensor SPI clock |
-| 2        | MOSI (SDI) | GPIO33 | J2, 12th       | sensor bus |
-| 3        | MISO (SDO) | GPIO4  | J3, 15th       | sensor bus |
-| 1        | CS     | GPIO47    | J2, 13th        | dedicated chip-select |
-| 8        | INT1   | GPIO6     | J3, 17th        | motion-wake interrupt (RTC-capable → wakes from deep sleep) |
+| PMDZ pin | Signal | Wire to V4 (chip GPIO) | Header position | Notes |
+|----------|--------|------------------------|-----------------|-------|
+| 1  | CS         | GPIO47 | J2, 13th | dedicated chip-select |
+| 2  | MOSI (SDI) | GPIO33 | J2, 12th | sensor bus |
+| 3  | MISO (SDO) | GPIO4  | J3, 15th | sensor bus |
+| 4  | SCLK       | GPIO48 | J2, 14th | sensor SPI clock |
+| 5  | GND        | GND    | J2, 1st  | |
+| 6  | VDD        | Ve rail | J2, 3rd or 4th | switched 3.3 V — powered down during sleep |
+| 7  | DRDY       | — leave open | | not used by this firmware |
+| 8  | INT1       | GPIO6  | J3, 17th | motion-wake interrupt (RTC-capable → wakes from deep sleep) |
+| 9  | INT2       | — leave open | | |
+| 10 | (NC)       | —      | | |
+| 11 | GND        | (optional 2nd GND) | | |
+| 12 | VDD        | (optional 2nd VDD) | | |
 
-Seven wires total (PMDZ pins 1, 2, 3, 4, 5, 6, 8). Leave DRDY (7), INT2
-(9), and pin 10 open; 11/12 are duplicate GND/VDD.
+Seven wires total (PMDZ pins 1, 2, 3, 4, 5, 6, 8).
+
+> ⚠️ **Verify against the silk before soldering.** The PMDZ prints tiny
+> labels (CS, MOSI, MISO, SCLK, DRDY, INT1, VDD, GND) near the header —
+> match by those labels, not the pin numbers above, in case your board
+> rev orders them differently. If your board has only a single populated
+> 6-pin row, it carries pins 1–6 (SPI + power) but **not INT1**, which
+> motion-wake needs — populate the second row.
+
+For reference, on the **bare ADXL355 chip** (14-terminal LCC — not what
+you wire to on the PMDZ): terminal 1 = CS/SCL, 2 = SCLK/VSSIO,
+3 = MOSI/SDA, 4 = MISO/ASEL. The chip auto-selects SPI vs I2C: grounding
+terminal 2 selects I2C (with terminal 4 as address select). The PMDZ
+routes it for SPI — nothing to configure; this firmware talks SPI mode 0.
 
 ### Option B — SM-24 geophone + ADS1220 (analog front-end)
 
