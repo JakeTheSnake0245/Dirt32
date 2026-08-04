@@ -29,6 +29,11 @@ public:
     /* Run self-test / sanity check; used for HEALTH_FLAGS bit2. */
     virtual bool selfTest() = 0;
 
+    /* Lightweight comms probe: read chip ID(s), print a one-line verdict.
+       Used by the `sensorid` CLI diagnostic to watch for a bus that dies
+       some time after boot. Returns true if the chip answered correctly. */
+    virtual bool probe() = 0;
+
     /* Quiesce the chip before Ve is cut. */
     virtual void powerDown() = 0;
 };

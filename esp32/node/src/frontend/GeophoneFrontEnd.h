@@ -16,6 +16,7 @@ public:
     bool supportsMotionWake() const override { return false; }
     int armMotionWake(float) override { return -1; }
     bool selfTest() override;
+    bool probe() override;
     void powerDown() override;
 
 private:

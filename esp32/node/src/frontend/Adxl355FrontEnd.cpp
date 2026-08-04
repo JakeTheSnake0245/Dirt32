@@ -147,6 +147,16 @@ bool Adxl355FrontEnd::selfTest() {
     return delta > 400;
 }
 
+bool Adxl355FrontEnd::probe() {
+    uint8_t devid = reg(REG_DEVID_AD);
+    uint8_t partid = reg(REG_PARTID);
+    bool ok = (devid == 0xAD && partid == 0xED);
+    Serial.printf("[probe %8lums] DEVID_AD=0x%02X PARTID=0x%02X %s\n",
+                  (unsigned long)millis(), devid, partid,
+                  ok ? "OK" : "FAIL");
+    return ok;
+}
+
 void Adxl355FrontEnd::powerDown() {
     regWrite(REG_POWER_CTL, 0x01); /* standby; Ve will be cut anyway */
 }

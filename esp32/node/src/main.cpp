@@ -277,6 +277,7 @@ static void printHelp() {
         "  gpsfix               acquire+print a parsed GPS fix\n"
         "  gpsdiag              low-level GPS wiring/power diagnostic\n"
         "  gpsraw               bare-minimum factory-style UART dump (no powerOff first)\n"
+        "  sensorid [secs]      probe sensor chip ID every 1s (default 30) — catches a bus dying after boot\n"
         "  sleep                enter deep sleep now\n"
         "  reboot");
 }
@@ -329,6 +330,21 @@ static void handleCli(String line) {
             }
             if (n == 0) delay(2);
         }
+    }
+    else if (cmd == "sensorid") {
+        /* Watch for a sensor bus that dies some time after boot: probe the
+         * chip ID once a second and timestamp when (if) it stops answering. */
+        uint32_t secs = rest.isEmpty() ? 30 : (uint32_t)rest.toInt();
+        if (secs == 0) secs = 30;
+        Serial.printf("[sensorid] probing every 1s for %lus (Ctrl+C not needed — it stops itself)\n",
+                      (unsigned long)secs);
+        if (!frontEnd) { Serial.println("no front-end"); return; }
+        uint32_t t0 = millis();
+        while (millis() - t0 < secs * 1000) {
+            frontEnd->probe();
+            delay(1000);
+        }
+        Serial.println("[sensorid] done");
     }
     else if (cmd == "selftest") {
         selfTestOk = frontEnd && frontEnd->selfTest();

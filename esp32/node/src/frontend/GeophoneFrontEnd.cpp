@@ -87,6 +87,16 @@ bool GeophoneFrontEnd::selfTest() {
     return true;
 }
 
+bool GeophoneFrontEnd::probe() {
+    /* ADS1220 has no ID register — liveness = conversions flowing. */
+    int16_t buf[4];
+    delay(10);
+    size_t n = read(buf, 4);
+    Serial.printf("[probe %8lums] ADS1220 conversions=%u %s\n",
+                  (unsigned long)millis(), (unsigned)n, n ? "OK" : "FAIL");
+    return n > 0;
+}
+
 void GeophoneFrontEnd::powerDown() {
     cmd(CMD_POWERDOWN);
 }
