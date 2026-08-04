@@ -634,6 +634,33 @@ void setup() {
                    ? (FrontEnd *)&adxl : (FrontEnd *)&geo;
     Serial.println("[boot] sensor front-end init...");
     sensorOk = frontEnd->begin(cfg.sample_rate_hz);
+    if (!sensorOk) {
+        /* Chip observed latching up on measurement-mode entry, dead until
+         * real power removal. Ve is firmware-switched — cycle it and retry.
+         * If this recovers the chip, its VDD is genuinely on the Ve rail and
+         * the fault is a supply latch-up; if it does NOT recover but a USB
+         * replug does, VDD is wired to always-on 3V3 instead of Ve. */
+        Serial.println("[sensor] init FAILED — cycling Ve rail (2s off) and retrying...");
+        frontEnd->powerDown();      /* best effort; chip may not hear it */
+        /* Drive ALL bus lines low while Ve is off — an idle-high CS/SCK/MOSI
+         * would back-feed the unpowered chip through its protection diodes
+         * and keep it latched. */
+        sensorSPI.end();
+        pinMode(PIN_SENS_SCK, OUTPUT);  digitalWrite(PIN_SENS_SCK, LOW);
+        pinMode(PIN_SENS_MOSI, OUTPUT); digitalWrite(PIN_SENS_MOSI, LOW);
+        pinMode(PIN_ADXL_CS, OUTPUT);   digitalWrite(PIN_ADXL_CS, LOW);
+        pinMode(PIN_SENS_MISO, INPUT);  /* no pullup */
+        vePower(false);
+        delay(2000);                /* let rail + sensor caps fully drain */
+        vePower(true);
+        delay(50);
+        sensorSPI.begin(PIN_SENS_SCK, PIN_SENS_MISO, PIN_SENS_MOSI, /*SS*/-1);
+        digitalWrite(PIN_ADXL_CS, HIGH);
+        sensorOk = frontEnd->begin(cfg.sample_rate_hz);
+        Serial.println(sensorOk
+            ? "[sensor] RECOVERED after Ve cycle -> VDD is on Ve; latch-up on measure entry"
+            : "[sensor] still dead after Ve cycle -> VDD likely NOT on the Ve rail (check for 3V3 pin), or chip damaged");
+    }
     if (!sensorOk) Serial.println("[sensor] front-end init FAILED (taptest still works)");
     Serial.println("[boot] detector init...");
 
