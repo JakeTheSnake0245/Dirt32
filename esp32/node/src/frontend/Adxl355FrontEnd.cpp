@@ -65,15 +65,36 @@ bool Adxl355FrontEnd::begin(uint16_t sample_rate_hz) {
     }
     Serial.println("[adxl355] ID OK (0xAD/0xED)");
 
+    /* Bisect instrumentation: the chip has been observed answering the ID
+     * reads above and then going permanently silent (0x00) moments later.
+     * Re-verify the ID after EVERY config transaction to catch the exact
+     * one that kills it. */
+    auto still = [this](const char *after) {
+        uint8_t d = reg(REG_DEVID_AD);
+        if (d != 0xAD) {
+            Serial.printf("[adxl355] BUS DIED after %s (DEVID now 0x%02X)\n",
+                          after, d);
+            return false;
+        }
+        Serial.printf("[adxl355] alive after %s\n", after);
+        return true;
+    };
+
     regWrite(REG_POWER_CTL, 0x01);          /* standby for config */
+    if (!still("POWER_CTL=standby")) return false;
     regWrite(REG_RANGE, 0x01);              /* ±2 g — max sensitivity */
+    if (!still("RANGE=2g")) return false;
 
     /* ODR: 0=4kHz .. 5=125Hz, 4=250Hz, 3=500Hz. Pick nearest >= requested. */
     uint8_t odr = (sample_rate_hz > 250) ? 0x03 /*500*/ : 0x04 /*250*/;
     regWrite(REG_FILTER, odr);              /* no HPF here — done in DSP */
+    if (!still("FILTER/ODR")) return false;
 
     regWrite(REG_POWER_CTL, 0x00);          /* measurement mode */
     delay(20);
+    if (!still("POWER_CTL=measure (+20ms)")) return false;
+    delay(200);
+    if (!still("measure +200ms")) return false;
     return true;
 }
 
