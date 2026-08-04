@@ -112,6 +112,21 @@ int Adxl355FrontEnd::armMotionWake(float threshold_g) {
 }
 
 bool Adxl355FrontEnd::selfTest() {
+    /* First: re-probe the device IDs so a wiring fault is reported here,
+     * not just in the boot log.
+     *   0x00/0x00 → MISO dead, sensor unpowered, or CS not connected
+     *   0xFF/0xFF → sensor not driving the bus (CS or SCLK on wrong pin)
+     *   other     → data garbled (SCLK/MOSI swapped, bad contact)      */
+    uint8_t devid = reg(REG_DEVID_AD);
+    uint8_t partid = reg(REG_PARTID);
+    if (devid != 0xAD || partid != 0xED) {
+        Serial.printf("[adxl355] ID check FAILED: DEVID_AD=0x%02X (want 0xAD) "
+                      "PARTID=0x%02X (want 0xED) — wiring fault, see README\n",
+                      devid, partid);
+        return false;
+    }
+    Serial.println("[adxl355] ID OK (0xAD/0xED) — wiring good, testing actuation...");
+
     /* Force self-test actuation, expect Z shift of roughly 0.1-0.6 g. */
     int16_t buf[8];
     delay(50); (void)read(buf, 8);
