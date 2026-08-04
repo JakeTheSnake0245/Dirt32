@@ -251,6 +251,23 @@ void Adxl355FrontEnd::postMortem() {
     }
     int i1 = digitalRead(_int1);
     Serial.printf("[postmortem] INT1 level: %d\n", i1);
+
+    /* Decisive test: the WRITE path (SCK/MOSI/CS) is unaffected by whatever
+     * is clamping MISO. Blindly command standby; if reads come back, the
+     * chip was never dead — a measurement-mode output (DRDY drives constant
+     * LOW in measurement, esp. with DRDY_OFF) is clamping the MISO line.
+     * On the PMDZ header, DRDY (pin 9) sits directly under MISO (pin 3). */
+    regWrite(REG_POWER_CTL, 0x01);   /* blind: back to standby */
+    delay(10);
+    uint8_t d = reg(REG_DEVID_AD);
+    if (d == 0xAD) {
+        Serial.println("[postmortem] BLIND STANDBY WRITE REVIVED IT -> chip was never dead!");
+        Serial.println("[postmortem] MISO is clamped by a measurement-mode output.");
+        Serial.println("[postmortem] CHECK: short between PMDZ pin 3 (MISO) and pin 9 (DRDY)");
+        Serial.println("[postmortem]        (also pins 7 INT1 / 8 INT2 / adjacent breadboard rows)");
+    } else {
+        Serial.printf("[postmortem] blind standby write did not revive (DEVID=0x%02X) — chip genuinely latched\n", d);
+    }
 }
 
 /* ID read at an arbitrary SPI clock — used to distinguish a marginal
