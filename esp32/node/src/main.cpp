@@ -118,9 +118,21 @@ static uint16_t readBatteryMv() {
  * This only *reports* it: if solar_sense_gpio is set, a divided-down panel
  * rail is read and the ON_SOLAR health flag is set in heartbeats. */
 static bool onSolar() {
-    if (cfg.solar_sense_gpio < 0) return false;
-    pinMode((uint8_t)cfg.solar_sense_gpio, INPUT);
-    return digitalRead((uint8_t)cfg.solar_sense_gpio) == HIGH;
+    int8_t p = cfg.solar_sense_gpio;
+    if (p < 0) return false;
+    /* Runtime guard for stale saved configs: never touch a pin owned by
+     * the sensor bus, radio, GPS, or power rails — pinMode(INPUT) here
+     * silently killed the sensor SPI when old configs had gpio 48. */
+    if (p == PIN_SENS_SCK || p == PIN_SENS_MISO || p == PIN_SENS_MOSI ||
+        p == PIN_ADXL_CS || p == PIN_ADXL_INT1 ||
+        p == PIN_ADS_CS  || p == PIN_ADS_DRDY ||
+        p == LORA_NSS || p == LORA_DIO1 || p == LORA_RST || p == LORA_BUSY ||
+        p == PIN_GPS_RX || p == PIN_GPS_TX || p == PIN_GPS_EN || p == PIN_GPS_RESET ||
+        p == PIN_VE || p == PIN_VBAT || p == PIN_BUTTON) {
+        return false;
+    }
+    pinMode((uint8_t)p, INPUT);
+    return digitalRead((uint8_t)p) == HIGH;
 }
 
 /* ---------- GPS (Heltec L76K GNSS plug-in module) ---------- */

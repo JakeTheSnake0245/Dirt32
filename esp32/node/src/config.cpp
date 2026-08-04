@@ -163,7 +163,21 @@ bool configSet(NodeConfig &cfg, const String &key, const String &value) {
     if (key == "motion_wake_enable") { cfg.motion_wake_enable = value.toInt() != 0; return true; }
     if (key == "motion_threshold") { cfg.motion_threshold_g = value.toFloat(); return true; }
     if (key == "gps_enable") { cfg.gps_enable = value.toInt() != 0; return true; }
-    if (key == "solar_sense_gpio") { cfg.solar_sense_gpio = (int8_t)value.toInt(); return true; }
+    if (key == "solar_sense_gpio") {
+        int v = value.toInt();
+        if (v >= 0) {
+            /* Reject pins already owned by the node's hardware — a solar
+             * pinMode(INPUT) on one of these silently kills that bus.
+             * Sensor SPI 48/33/4, ADXL 47/6, ADS 46/3, LoRa 8/12/13/14 +
+             * internal SPI 9/10/11, GPS 38/39/34/42, Ve 36, VBAT 1,
+             * button 0, RF-amp 2/7, flash/PSRAM 26-32, OLED 17/18. */
+            static const int8_t reserved[] = { 0,1,2,3,4,6,7,8,9,10,11,12,13,14,
+                                               17,18,26,27,28,29,30,31,32,33,34,
+                                               36,38,39,42,46,47,48 };
+            for (int8_t r : reserved) if (v == r) return false;
+        }
+        cfg.solar_sense_gpio = (int8_t)v; return true;
+    }
     if (key == "gps_fix_timeout_s") { cfg.gps_fix_timeout_s = value.toInt(); return true; }
     if (key == "fallback_lat") {
         float v = value.toFloat();
