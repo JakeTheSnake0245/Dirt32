@@ -16,6 +16,7 @@
 #include <SPI.h>
 #include <driver/gpio.h>   /* gpio_get_level — used by gpsraw */
 #include <esp_idf_version.h>
+#include <soc/gpio_struct.h>  /* GPIO matrix registers — sensorid pin dump */
 #include "sps_proto.h"
 #include "config.h"
 #include "frontend/FrontEnd.h"
@@ -345,14 +346,23 @@ static void handleCli(String line) {
         while (millis() - t0 < secs * 1000) {
             bool ok = frontEnd->probe();
             if (!ok && wasOk) {
-                /* First failure: bisect firmware vs hardware. */
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 4, 4)
-                Serial.println("[sensorid] dumping sensor-pin GPIO config:");
-                uint64_t mask = (1ULL << PIN_SENS_SCK) | (1ULL << PIN_SENS_MISO) |
-                                (1ULL << PIN_SENS_MOSI) | (1ULL << PIN_ADXL_CS) |
-                                (1ULL << PIN_ADXL_INT1);
-                gpio_dump_io_configuration(stdout, mask);
-#endif
+                /* First failure: bisect firmware vs hardware.
+                 * Dump each sensor pin's GPIO-matrix routing straight from
+                 * the registers (portable across core versions):
+                 *   out_sel 256 = plain GPIO; other values = a peripheral
+                 *   signal owns the pin. oe = output enable. */
+                Serial.println("[sensorid] sensor-pin routing (out_sel 256 = plain GPIO):");
+                static const int probePins[] = { PIN_SENS_SCK, PIN_SENS_MISO,
+                                                 PIN_SENS_MOSI, PIN_ADXL_CS,
+                                                 PIN_ADXL_INT1 };
+                for (int p : probePins) {
+                    uint32_t outSel = GPIO.func_out_sel_cfg[p].func_sel;
+                    bool oe = (p < 32) ? ((GPIO.enable.val >> p) & 1)
+                                       : ((GPIO.enable1.val >> (p - 32)) & 1);
+                    Serial.printf("  GPIO%-2d level=%d out_sel=%lu oe=%d\n",
+                                  p, gpio_get_level((gpio_num_t)p),
+                                  (unsigned long)outSel, (int)oe);
+                }
                 Serial.println("[sensorid] attempting live driver re-init...");
                 bool r = frontEnd->begin(cfg.sample_rate_hz);
                 Serial.printf("[sensorid] re-init %s\n",
