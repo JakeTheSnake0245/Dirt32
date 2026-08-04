@@ -52,7 +52,18 @@ bool Adxl355FrontEnd::begin(uint16_t sample_rate_hz) {
     pinMode(_int1, INPUT);
     delay(10); /* Ve rail settle */
 
-    if (reg(REG_DEVID_AD) != 0xAD || reg(REG_PARTID) != 0xED) return false;
+    uint8_t devid = reg(REG_DEVID_AD);
+    uint8_t partid = reg(REG_PARTID);
+    if (devid != 0xAD || partid != 0xED) {
+        /* Print raw bytes — they tell you WHERE the wiring is broken:
+         *   0x00/0x00 → MISO line dead, sensor unpowered, or CS not reaching it
+         *   0xFF/0xFF → MISO floating (sensor not driving the bus: CS or SCLK wrong)
+         *   other     → data garbled (SCLK/MOSI swapped, bad contact, wrong mode) */
+        Serial.printf("[adxl355] ID check FAILED: DEVID_AD=0x%02X (want 0xAD) "
+                      "PARTID=0x%02X (want 0xED)\n", devid, partid);
+        return false;
+    }
+    Serial.println("[adxl355] ID OK (0xAD/0xED)");
 
     regWrite(REG_POWER_CTL, 0x01);          /* standby for config */
     regWrite(REG_RANGE, 0x01);              /* ±2 g — max sensitivity */
