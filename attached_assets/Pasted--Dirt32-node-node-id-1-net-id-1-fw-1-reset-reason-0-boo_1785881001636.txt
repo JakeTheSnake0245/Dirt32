@@ -1,0 +1,83 @@
+
+=== Dirt32 node ===
+node_id=1 net_id=1 fw=1 reset_reason=0
+[boot] radio init...
+[boot] radio OK
+[boot] sensor rail + SPI...
+[boot] sensor front-end init...
+[adxl355] ID OK (0xAD/0xED)
+[boot] detector init...
+Bench mode — CLI active. `help` for commands.
+Press PRG button (or `screen`) for the link-debug display.
+sensorid 60
+[sensorid] probing every 1s for 60s (Ctrl+C not needed — it stops itself)
+[probe    11275ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[sensorid] sensor-pin routing (out_sel 256 = plain GPIO):
+  GPIO48 level=0 out_sel=66 oe=1
+  GPIO4  level=0 out_sel=256 oe=0
+  GPIO33 level=0 out_sel=68 oe=1
+  GPIO47 level=1 out_sel=256 oe=1
+  GPIO6  level=0 out_sel=256 oe=0
+[sensorid] attempting live driver re-init...
+[adxl355] ID check FAILED: DEVID_AD=0x00 (want 0xAD) PARTID=0x00 (want 0xED)
+[sensorid] re-init FAILED -> sensor lost power or a wire (hardware side)
+[probe    12285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    13285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    14285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    15285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    16285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    17285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    18285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    19285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    20285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    21285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    22285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    23285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    24285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    25285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    26285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    27285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    28285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    29285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    30285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    31285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    32285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    33285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    34285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    35285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    36285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    37285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    38285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    39285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    40285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    41285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    42285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    43285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    44285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    45285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    46285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    47285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    48285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    49285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    50285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    51285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    52285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    53285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    54285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    55285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    56285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    57285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    58285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    59285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    60285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    61285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    62285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    63285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    64285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    65285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    66285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    67285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    68285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    69285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[probe    70285ms] DEVID_AD=0x00 PARTID=0x00 FAIL
+[sensorid] done
