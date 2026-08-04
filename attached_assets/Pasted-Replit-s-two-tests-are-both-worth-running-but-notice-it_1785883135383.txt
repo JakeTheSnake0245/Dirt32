@@ -1,0 +1,17 @@
+Replit's two tests are both worth running — but notice its own case file still contains the loose thread, and it's about to test past it. It lists "CS/SCK/MOSI/MISO integrity — dozens of clean transactions" as proven good. That's true only in standby. The ADXL355 datasheet's SPI-bus-sharing warning is specifically that stray SCLK edges corrupt the part once the analog datapath is live — the exact 20 ms window where you die. "Clean transactions in standby" does not clear the shared bus; it's consistent with the shared bus being the killer. So the case isn't as closed as it reads.
+
+That said, run Replit's Test 1 (VDD → always-on 3V3) first — it's two minutes and it's genuinely useful. Rail sag through the Vext PMOS under analog-turn-on inrush is real and would fit. Do it.
+
+But add one more two-minute test of equal priority, and run it in the same session: pull the LoRa radio off the bus during sensor init. If the ADXL is still sharing SCK with the SX1262, have the firmware hold the radio's NSS deasserted and issue no radio traffic across the standby→measure transition — or simplest, temporarily point the ADXL's SPI at the Option-1 dedicated pins (SCK=48 / MISO=4 / MOSI=33 / CS=47) with nothing else on them. Then enter measurement mode.
+
+The logic that separates all three suspects cleanly:
+
+3V3 fixes it → rail sag; keep Ve + add the 10 µF across pins 5–6, as Replit said.
+Dedicated/quiet bus fixes it (but 3V3 alone didn't) → shared-SCLK corruption, exactly the datasheet's warning — and the fix is the Option-1 remap you need for the V4 anyway.
+Neither fixes it → then it's a damaged analog die, and Replit's Test 2 (swap the module) is the right call.
+
+Replit's ordering jumps from "rail" straight to "damaged chip" and skips the bus-contention cause entirely — which is the one its own evidence most supports and the one that costs nothing to rule out. Run 3V3 and quiet-bus back to back before you conclude the die is dead and start swapping hardware.
+
+One reinforcing point for the damaged-die branch, since it's real: you did have a crossed rail earlier in this build. If the swap module also dies identically on a dedicated quiet bus, that's your answer and it's not bad luck — it's that the original wiring cooked this one's analog section. So if you're opening a new module anyway, wire it to the dedicated Option-1 pins from the first power-up, never to the shared radio bus — don't risk a second part on the configuration the datasheet tells you not to use.
+
+Want me to write the exact quiet-bus test diff (radio held off + ADX on the dedicated pins) so you can hand both Test 1 and this to Replit as one change?
