@@ -16,7 +16,15 @@ static const uint8_t REG_RANGE      = 0x2C;
 static const uint8_t REG_POWER_CTL  = 0x2D;
 static const uint8_t REG_SELFTEST   = 0x2E;
 
-static const uint32_t SPI_HZ = 5000000;
+/* Bus clock is adjustable at runtime: chip observed latching at measurement
+ * entry; if the whole init sequence at 100 kHz survives, the root cause is
+ * signal integrity (edge ringing/overshoot on jumper wires) at 5 MHz. */
+static uint32_t SPI_HZ = 5000000;
+
+void Adxl355FrontEnd::setSpiHz(uint32_t hz) {
+    SPI_HZ = hz;
+    Serial.printf("[adxl355] SPI clock set to %lu Hz\n", (unsigned long)hz);
+}
 
 uint8_t Adxl355FrontEnd::reg(uint8_t addr) {
     _spi.beginTransaction(SPISettings(SPI_HZ, MSBFIRST, SPI_MODE0));

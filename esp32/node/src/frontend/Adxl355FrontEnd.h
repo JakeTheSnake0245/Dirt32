@@ -19,6 +19,7 @@ public:
     bool probe() override;
     bool alive() override;
     void powerDown() override;
+    static void setSpiHz(uint32_t hz);   /* diagnostic: retry init dead-slow */
 
 private:
     uint8_t  reg(uint8_t addr);

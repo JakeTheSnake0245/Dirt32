@@ -656,9 +656,17 @@ void setup() {
         delay(50);
         sensorSPI.begin(PIN_SENS_SCK, PIN_SENS_MISO, PIN_SENS_MOSI, /*SS*/-1);
         digitalWrite(PIN_ADXL_CS, HIGH);
+        /* Retry the ENTIRE init dead-slow: if 100 kHz survives measurement
+         * entry where 5 MHz latched the chip, the fault is signal integrity
+         * (edge ringing on jumper wires injecting current past the protection
+         * diodes), not the chip or the supply. */
+        if (cfg.front_end == FE_ADXL355) {
+            Serial.println("[sensor] retrying full init at 100 kHz SPI (signal-integrity test)...");
+            Adxl355FrontEnd::setSpiHz(100000);
+        }
         sensorOk = frontEnd->begin(cfg.sample_rate_hz);
         Serial.println(sensorOk
-            ? "[sensor] RECOVERED after Ve cycle -> VDD is on Ve; latch-up on measure entry"
+            ? "[sensor] RECOVERED after Ve cycle -> if clock is 100kHz, 5MHz edges were latching the chip"
             : "[sensor] still dead after Ve cycle -> VDD likely NOT on the Ve rail (check for 3V3 pin), or chip damaged");
     }
     if (!sensorOk) Serial.println("[sensor] front-end init FAILED (taptest still works)");
