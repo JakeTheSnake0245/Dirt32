@@ -95,6 +95,29 @@ static void seqRestore() {
 }
 
 /* ---------- Ve sensor power rail (spec §5.2 — verify polarity!) ---------- */
+static SPIClass sensorSPI(HSPI);
+
+static void vePower(bool on);
+
+/* Cycle the sensor Ve rail with all bus lines driven LOW (so nothing
+ * back-feeds the unpowered chip through its protection diodes), then
+ * re-attach the SPI bus. Recovers an ADXL355 latched at measurement entry. */
+static void sensorRailCycle(uint32_t off_ms) {
+    sensorSPI.end();
+    pinMode(PIN_SENS_SCK, OUTPUT);  digitalWrite(PIN_SENS_SCK, LOW);
+    pinMode(PIN_SENS_MOSI, OUTPUT); digitalWrite(PIN_SENS_MOSI, LOW);
+    pinMode(PIN_ADXL_CS, OUTPUT);   digitalWrite(PIN_ADXL_CS, LOW);
+    pinMode(PIN_ADS_CS, OUTPUT);    digitalWrite(PIN_ADS_CS, LOW);
+    pinMode(PIN_SENS_MISO, INPUT);  /* no pullup */
+    vePower(false);
+    delay(off_ms);
+    vePower(true);
+    delay(50);
+    sensorSPI.begin(PIN_SENS_SCK, PIN_SENS_MISO, PIN_SENS_MOSI, /*SS*/-1);
+    digitalWrite(PIN_ADXL_CS, HIGH);
+    digitalWrite(PIN_ADS_CS, HIGH);
+}
+
 static void vePower(bool on) {
     pinMode(PIN_VE, OUTPUT);
     /* Vext (GPIO36) is ACTIVE-LOW on the Heltec V4 (confirmed against
@@ -339,6 +362,10 @@ static void handleCli(String line) {
         uint32_t secs = rest.length() ? (uint32_t)rest.toInt() : 15;
         if (secs < 3) secs = 3;
         if (cfg.front_end == FE_ADXL355 && frontEnd) {
+            /* Boot init has usually already latched the chip — revive it
+             * with a rail cycle before probing. */
+            Serial.println("[adxlprobe] cycling Ve rail first (2s off) to revive a latched chip...");
+            sensorRailCycle(2000);
             ((Adxl355FrontEnd *)frontEnd)->measureEntryProbe(secs);
         } else {
             Serial.println("[adxlprobe] ADXL355 front-end not active");
@@ -643,7 +670,6 @@ void setup() {
     /* Sensors get a DEDICATED SPI bus on header-exposed pins — on the V4,
      * the radio's SCK9/MOSI10/MISO11 nets are internal-only (no header pads),
      * so the old shared-bus wiring is physically impossible. */
-    static SPIClass sensorSPI(HSPI);
     sensorSPI.begin(PIN_SENS_SCK, PIN_SENS_MISO, PIN_SENS_MOSI, /*SS*/-1);
     static Adxl355FrontEnd adxl(sensorSPI, PIN_ADXL_CS, PIN_ADXL_INT1, PIN_SENS_MISO);
     static GeophoneFrontEnd geo(sensorSPI, PIN_ADS_CS, PIN_ADS_DRDY);
@@ -659,20 +685,7 @@ void setup() {
          * replug does, VDD is wired to always-on 3V3 instead of Ve. */
         Serial.println("[sensor] init FAILED — cycling Ve rail (2s off) and retrying...");
         frontEnd->powerDown();      /* best effort; chip may not hear it */
-        /* Drive ALL bus lines low while Ve is off — an idle-high CS/SCK/MOSI
-         * would back-feed the unpowered chip through its protection diodes
-         * and keep it latched. */
-        sensorSPI.end();
-        pinMode(PIN_SENS_SCK, OUTPUT);  digitalWrite(PIN_SENS_SCK, LOW);
-        pinMode(PIN_SENS_MOSI, OUTPUT); digitalWrite(PIN_SENS_MOSI, LOW);
-        pinMode(PIN_ADXL_CS, OUTPUT);   digitalWrite(PIN_ADXL_CS, LOW);
-        pinMode(PIN_SENS_MISO, INPUT);  /* no pullup */
-        vePower(false);
-        delay(2000);                /* let rail + sensor caps fully drain */
-        vePower(true);
-        delay(50);
-        sensorSPI.begin(PIN_SENS_SCK, PIN_SENS_MISO, PIN_SENS_MOSI, /*SS*/-1);
-        digitalWrite(PIN_ADXL_CS, HIGH);
+        sensorRailCycle(2000);      /* lines low + rail off = full drain */
         /* Retry the ENTIRE init dead-slow: if 100 kHz survives measurement
          * entry where 5 MHz latched the chip, the fault is signal integrity
          * (edge ringing on jumper wires injecting current past the protection
