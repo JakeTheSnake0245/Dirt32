@@ -90,9 +90,13 @@ bool Adxl355FrontEnd::begin(uint16_t sample_rate_hz) {
     regWrite(REG_FILTER, odr);              /* no HPF here — done in DSP */
     if (!still("FILTER/ODR")) return false;
 
-    regWrite(REG_POWER_CTL, 0x00);          /* measurement mode */
+    /* Measurement mode with DRDY_OFF (bit2): we poll the FIFO, so the DRDY
+     * pin is unused — and if the PMDZ's DRDY pad is shorted (solder bridge /
+     * breadboard contact), its driver fighting the short at measurement
+     * entry is exactly the observed latch-up-until-power-cycle. */
+    regWrite(REG_POWER_CTL, 0x04);          /* measure + DRDY_OFF */
     delay(20);
-    if (!still("POWER_CTL=measure (+20ms)")) return false;
+    if (!still("POWER_CTL=measure+DRDY_OFF (+20ms)")) return false;
     delay(200);
     if (!still("measure +200ms")) return false;
     return true;
@@ -127,8 +131,8 @@ int Adxl355FrontEnd::armMotionWake(float threshold_g) {
     regWrite(REG_ACT_COUNT, 2);                       /* 2 consecutive over-threshold */
     regWrite(REG_ACT_EN, 0x04);                       /* Z axis only */
     regWrite(REG_INT_MAP, 0x08);                      /* ACT -> INT1 */
-    /* low-power measurement stays on so activity engine runs */
-    regWrite(REG_POWER_CTL, 0x00);
+    /* low-power measurement stays on so activity engine runs (DRDY_OFF) */
+    regWrite(REG_POWER_CTL, 0x04);
     return _int1;
 }
 
