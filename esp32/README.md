@@ -145,7 +145,7 @@ matching Heltec's official V4 GPS example: UART RX = GPIO39, TX = GPIO38
 | Param               | Min | Max | Default = recommended | Why |
 |---------------------|-----|-----|-----------------------|-----|
 | `gps_enable`        | 0   | 1   | **1** (0 once planted)| Useful during install/survey; a buried node's position never changes, so turn it off and rely on the fallback to save battery |
-| `solar_sense_gpio`  | -1  | 48  | **-1** (off)          | Optional. Charging is pure hardware — the V4's charge IC charges the battery whenever 5 V is present (USB or solar), nothing to enable. Set this to a free GPIO (avoid 2/5/7/46 — RF front-end) wired to the panel rail through a ~100k/100k divider, and heartbeats will report the ON_SOLAR flag so the gateway can see the panel producing |
+| `solar_sense_gpio`  | -1  | 5   | **-1** (off)          | Optional. Charging is pure hardware — the V4's charge IC charges the battery whenever 5 V is present (USB or solar), nothing to enable. Set this to a free header GPIO (avoid 2/7 — RF front-end controls — and the sensor-bus pins 48/45/4/47/6/46/3) wired to the panel rail through a ~100k/100k divider, and heartbeats will report the ON_SOLAR flag so the gateway can see the panel producing |
 | `gps_fix_timeout_s` | 10  | 300 | **150**                | L76K cold start is 30-60 s with sky view; longer just drains the battery when buried |
 
 ### Detection / front-end parameters (sender-only, never affect compatibility)
@@ -216,40 +216,48 @@ SEQ 129  RADIO OK
                       │                    BUSY  GPIO13 │
    VBAT divider ──────┤ GPIO1                           │
                       │                                 │
-                      │  SHARED SPI BUS      GNSS PORT  │      ┌───────────┐
-        ┌── SCK ──────┤ GPIO9      GPIO39 (RX ◄─ L76K TX)──────┤  L76K     │
-        ├── MOSI ─────┤ GPIO10     GPIO38 (TX ─► L76K RX)──────┤  GNSS     │
-        ├── MISO ─────┤ GPIO11     GPIO34 (EN, ACTIVE LOW)─────┤  module   │
-        │             │            GPIO42 (RESET, keep HIGH)───┤ (plug-in) │
-        │             │                                 │      └───────────┘
-        │  ┌── CS ────┤ GPIO47   GPIO36 ── Ve rail ──┐  │
-        │  ├── INT1 ──┤ GPIO6    (switched 3.3 V,    │  │
-        │  │          │           ACTIVE LOW)        │  │
-        │  │  ┌─ CS ──┤ GPIO48                       │  │
-        │  │  ├─ DRDY─┤ GPIO4                        │  │
-        │  │  │       └──────────────────────────────┼──┘
-        │  │  │                                      │
-        ▼  ▼  │                                      │
-   ┌──────────┴──┐        DIGITAL SENSOR (option A)  │
-   │  ADXL355    │ VDD+VDDIO ◄── Ve ─────────────────┤
-   │  (SPI accel)│ GND ── GND                        │
-   └─────────────┘                                   │
-        │  │  │                                      │
-        ▼  ▼  ▼           ANALOG SENSOR (option B)   │
-   ┌─────────────┐ DVDD/AVDD ◄── Ve ─────────────────┘
-   │  ADS1220    │ GND ── GND
-   │  24-bit ADC │ AIN0 ◄──┐
-   │             │ AIN1 ◄──┤  differential pair (PGA ×32)
-   └─────────────┘         │
-                     ┌─────┴─────┐
-                     │   SM-24   │  analog geophone — connects ONLY to the
-                     │  geophone │  ADS1220, never to an ESP32 pin
-                     └───────────┘  (~1 kΩ damping resistor across coil)
+                       │  SENSOR SPI BUS      GNSS PORT  │      ┌───────────┐
+         ┌── SCK ──────┤ GPIO48     GPIO39 (RX ◄─ L76K TX)──────┤  L76K     │
+         │   (J2.14)   │            GPIO38 (TX ─► L76K RX)──────┤  GNSS     │
+         ├── MOSI ─────┤ GPIO45     GPIO34 (EN, ACTIVE LOW)─────┤  module   │
+         │   (J3.6)    │            GPIO42 (RESET, keep HIGH)───┤ (plug-in) │
+         ├── MISO ─────┤ GPIO4                           │      └───────────┘
+         │   (J3.15)   │                                 │
+         │  ┌── CS ────┤ GPIO47   GPIO36 ── Ve rail ──┐  │
+         │  │  (J2.13) │          (switched 3.3 V,    │  │
+         │  ├── INT1 ──┤ GPIO6     ACTIVE LOW —       │  │
+         │  │  (J3.17) │           Ve out on J2.3/4)  │  │
+         │  │  ┌─ CS ──┤ GPIO46 (J3.5)                │  │
+         │  │  ├─ DRDY─┤ GPIO3  (J3.14)               │  │
+         │  │  │       └──────────────────────────────┼──┘
+         │  │  │                                      │
+         ▼  ▼  │                                      │
+    ┌──────────┴──┐        DIGITAL SENSOR (option A)  │
+    │  ADXL355    │ VDD+VDDIO ◄── Ve ─────────────────┤
+    │  (SPI accel)│ GND ── GND                        │
+    └─────────────┘                                   │
+         │  │  │                                      │
+         ▼  ▼  ▼           ANALOG SENSOR (option B)   │
+    ┌─────────────┐ DVDD/AVDD ◄── Ve ─────────────────┘
+    │  ADS1220    │ GND ── GND
+    │  24-bit ADC │ AIN0 ◄──┐
+    │             │ AIN1 ◄──┤  differential pair (PGA ×32)
+    └─────────────┘         │
+                      ┌─────┴─────┐
+                      │   SM-24   │  analog geophone — connects ONLY to the
+                      │  geophone │  ADS1220, never to an ESP32 pin
+                      └───────────┘  (~1 kΩ damping resistor across coil)
 ```
 
-Wire ONE sensor option (A or B) — both share SCK=9 / MOSI=10 / MISO=11 with
-the on-board radio; only CS/INT/DRDY differ. Select with
-`set front_end adxl355|geophone`.
+> ⚠️ **V4 correction:** the LoRa radio's SPI (SCK=9 / MOSI=10 / MISO=11)
+> is routed **internally** to the SX1262 — those GPIOs are NOT on J2, J3,
+> or the aux header (V4.3 datasheet §2.2), so sensors **cannot** share the
+> radio bus on the V4 (that layout was a V3 carry-over). Sensors now use a
+> **dedicated SPI bus** on header-exposed pins:
+> SCK=GPIO48 (J2.14), MOSI=GPIO45 (J3.6), MISO=GPIO4 (J3.15).
+
+Wire ONE sensor option (A or B) — both share the dedicated sensor SPI bus;
+only CS/INT/DRDY differ. Select with `set front_end adxl355|geophone`.
 
 ### Master pin table
 
@@ -257,21 +265,25 @@ Matches `platformio.ini` build flags (the source of truth).
 
 | Function | GPIO | Dir | Notes |
 |----------|------|-----|-------|
-| **Shared SPI bus** (LoRa + both sensors) | | | |
+| **Radio SPI bus** (internal — no header pads; software still needs explicit pins) | | | |
 | SPI SCK  | 9  | out | `SPI.begin(9, 11, 10, -1)` — explicit pins are CRITICAL (see hazards) |
-| SPI MISO | 11 | in  | |
-| SPI MOSI | 10 | out | |
+| SPI MISO | 11 | in  | internal net to SX1262 only |
+| SPI MOSI | 10 | out | internal net to SX1262 only |
 | **LoRa SX1262** (on-board) | | | |
 | NSS (CS) | 8  | out | |
 | DIO1     | 14 | in  | TX-done / RX interrupt |
 | RST      | 12 | out | |
 | BUSY     | 13 | in  | |
+| **Sensor SPI bus** (dedicated, header-exposed — both sensors) | | | |
+| SCK      | 48 | out | J2 pin 14 |
+| MISO     | 4  | in  | J3 pin 15 |
+| MOSI     | 45 | out | J3 pin 6 — strapping pin: OK as data line, no strong external pulls |
 | **ADXL355 digital accelerometer** (option A) | | | |
-| CS       | 47 | out | dedicated chip-select |
-| INT1     | 6  | in  | motion-wake (RTC-capable → wakes from deep sleep) |
+| CS       | 47 | out | J2 pin 13 — dedicated chip-select |
+| INT1     | 6  | in  | J3 pin 17 — motion-wake (RTC-capable → wakes from deep sleep) |
 | **ADS1220 24-bit ADC / SM-24 geophone** (option B, analog front-end) | | | |
-| CS       | 48 | out | dedicated chip-select |
-| DRDY     | 4  | in  | data-ready, polled |
+| CS       | 46 | out | J3 pin 5 — strapping pin: idles HIGH after boot, no strong pulls |
+| DRDY     | 3  | in  | J3 pin 14 — data-ready, polled; strapping pin, no strong pulls |
 | **L76K GNSS module** | | | |
 | UART RX  | 39 | in  | L76K TX → CPU (per Heltec's official V4 example) |
 | UART TX  | 38 | out | CPU → L76K RX |
@@ -284,7 +296,9 @@ Matches `platformio.ini` build flags (the source of truth).
 | Solar sense | user-set | in | optional, `set solar_sense_gpio <n>` through ~100k/100k divider |
 
 > ⚠️ **Off-limits GPIOs:**
-> - **2, 5, 7, 46** — used internally by the V4's RF power amplifier.
+> - **2, 7** — the V4's RF front-end amp controls (FEM_EN, VFEM_Control
+>   per the V4.3 datasheet); never assign them to sensors.
+> - **9, 10, 11** — LoRa SPI, internal to the SX1262, no header pads.
 > - **26–32** — wired to flash/PSRAM on the ESP32-S3; touching them
 >   crashes the chip (TG1WDT boot loop).
 > - **35, 37** — PSRAM on the 8 MB-PSRAM S3 modules; avoid.
@@ -293,21 +307,21 @@ Matches `platformio.ini` build flags (the source of truth).
 
 Both drivers are built and selectable at runtime — no reflash needed:
 `set front_end adxl355` or `set front_end geophone`, then `save`, `reboot`,
-and `selftest` to verify. Both sensors share the SPI bus with the LoRa
-radio (SCK = GPIO9, MISO = GPIO11, MOSI = GPIO10); each device gets its own
-chip-select.
+and `selftest` to verify. Both sensors share the dedicated sensor SPI bus
+(SCK = GPIO48 / J2.14, MOSI = GPIO45 / J3.6, MISO = GPIO4 / J3.15); each
+device gets its own chip-select.
 
 ### Option A — ADXL355 (digital, SPI) — recommended first
 
 | ADXL355 pin | V4 pin | Notes |
 |-------------|--------|-------|
-| VDD + VDDIO | Ve (3.3 V switched) | powered down during sleep between events |
-| GND         | GND    | |
-| SCLK        | GPIO9  | shared SPI clock |
-| MOSI (SDA)  | GPIO10 | shared |
-| MISO (SDO)  | GPIO11 | shared |
-| CS          | GPIO47 | dedicated chip-select |
-| INT1        | GPIO6  | motion-wake interrupt (RTC-capable → wakes from deep sleep) |
+| VDD + VDDIO | Ve (J2.3 or J2.4) | switched 3.3 V — powered down during sleep between events |
+| GND         | GND (J2.1) | |
+| SCLK        | GPIO48 (J2.14) | sensor SPI clock |
+| MOSI (SDA)  | GPIO45 (J3.6)  | sensor bus |
+| MISO (SDO)  | GPIO4 (J3.15)  | sensor bus |
+| CS          | GPIO47 (J2.13) | dedicated chip-select |
+| INT1        | GPIO6 (J3.17)  | motion-wake interrupt (RTC-capable → wakes from deep sleep) |
 
 ### Option B — SM-24 geophone + ADS1220 (analog front-end)
 
@@ -316,13 +330,13 @@ Its coil feeds the ADS1220's differential inputs; the ADS1220 talks SPI.
 
 | ADS1220 pin | V4 pin | Notes |
 |-------------|--------|-------|
-| DVDD/AVDD   | Ve (3.3 V switched) | |
-| GND         | GND    | |
-| SCLK        | GPIO9  | shared SPI clock |
-| DIN (MOSI)  | GPIO10 | shared |
-| DOUT (MISO) | GPIO11 | shared |
-| CS          | GPIO48 | dedicated chip-select |
-| DRDY        | GPIO4  | data-ready, polled |
+| DVDD/AVDD   | Ve (J2.3 or J2.4) | switched 3.3 V |
+| GND         | GND (J2.1) | |
+| SCLK        | GPIO48 (J2.14) | sensor SPI clock |
+| DIN (MOSI)  | GPIO45 (J3.6)  | sensor bus |
+| DOUT (MISO) | GPIO4 (J3.15)  | sensor bus |
+| CS          | GPIO46 (J3.5)  | dedicated chip-select (strapping pin — no strong external pulls) |
+| DRDY        | GPIO3 (J3.14)  | data-ready, polled (strapping pin — no strong external pulls) |
 | AIN0 / AIN1 | SM-24 coil ± | differential input, PGA gain 32 |
 
 The SM-24 connects directly to the ADS1220's differential inputs (add the

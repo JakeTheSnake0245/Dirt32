@@ -565,8 +565,13 @@ void setup() {
     /* Explicit pins prevent SPI from claiming GPIO38 (FSPIWP/GNSS_RX).
      * Without this, SPI.begin() drives GPIO38 LOW and UART RX never works. */
     SPI.begin(/*SCK*/9, /*MISO*/11, /*MOSI*/10, /*SS*/-1);
-    static Adxl355FrontEnd adxl(SPI, PIN_ADXL_CS, PIN_ADXL_INT1);
-    static GeophoneFrontEnd geo(SPI, PIN_ADS_CS, PIN_ADS_DRDY);
+    /* Sensors get a DEDICATED SPI bus on header-exposed pins — on the V4,
+     * the radio's SCK9/MOSI10/MISO11 nets are internal-only (no header pads),
+     * so the old shared-bus wiring is physically impossible. */
+    static SPIClass sensorSPI(HSPI);
+    sensorSPI.begin(PIN_SENS_SCK, PIN_SENS_MISO, PIN_SENS_MOSI, /*SS*/-1);
+    static Adxl355FrontEnd adxl(sensorSPI, PIN_ADXL_CS, PIN_ADXL_INT1);
+    static GeophoneFrontEnd geo(sensorSPI, PIN_ADS_CS, PIN_ADS_DRDY);
     frontEnd = (cfg.front_end == FE_ADXL355)
                    ? (FrontEnd *)&adxl : (FrontEnd *)&geo;
     Serial.println("[boot] sensor front-end init...");
