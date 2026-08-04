@@ -111,10 +111,32 @@ bool Adxl355FrontEnd::begin(uint16_t sample_rate_hz) {
         return true;
     };
 
+    /* Dump the NVM shadow registers (0x50-0x5E): a genuine ADXL355 holds
+     * ~15 nonzero factory-calibration bytes there after reset. All zeros
+     * strongly suggests counterfeit/blank silicon — which answers ID reads
+     * but dies when the (uncalibrated) analog engine is powered on. */
+    {
+        uint8_t sh[15];
+        burstRead(0x50, sh, sizeof(sh));
+        int nz = 0;
+        Serial.print("[adxl355] NVM shadow 0x50-0x5E:");
+        for (size_t i = 0; i < sizeof(sh); i++) {
+            Serial.printf(" %02X", sh[i]);
+            if (sh[i]) nz++;
+        }
+        Serial.printf("  (%d nonzero%s)\n", nz,
+                      nz == 0 ? " <- BLANK NVM: counterfeit/reject part?" : "");
+    }
+
     regWrite(REG_POWER_CTL, 0x01);          /* standby for config */
     if (!still("POWER_CTL=standby")) return false;
     regWrite(REG_RANGE, 0x01);              /* ±2 g — max sensitivity */
     if (!still("RANGE=2g")) return false;
+    {   /* readback-verify the config writes: proves MOSI/write path integrity */
+        uint8_t rr = reg(REG_RANGE);
+        Serial.printf("[adxl355] RANGE readback: 0x%02X (want 0x01) %s\n",
+                      rr, rr == 0x01 ? "OK" : "<- WRITE PATH BROKEN");
+    }
 
     /* ODR: 0=4kHz .. 5=125Hz, 4=250Hz, 3=500Hz. Pick nearest >= requested. */
     uint8_t odr = (sample_rate_hz > 250) ? 0x03 /*500*/ : 0x04 /*250*/;
