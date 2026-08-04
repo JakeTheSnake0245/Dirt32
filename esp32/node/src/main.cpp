@@ -629,6 +629,13 @@ void setup() {
 
     /* Front-end */
     Serial.println("[boot] sensor rail + SPI...");
+    /* Deselect BOTH sensor chip-selects before anything touches the shared
+     * bus. Critical: PIN_ADS_CS is GPIO46, an ESP32-S3 strapping pin with a
+     * default pull-DOWN — if left unconfigured while the ADXL front-end is
+     * active, a connected ADS1220 is permanently selected: it clocks in
+     * garbage from every ADXL transaction and can drive the shared MISO. */
+    pinMode(PIN_ADXL_CS, OUTPUT); digitalWrite(PIN_ADXL_CS, HIGH);
+    pinMode(PIN_ADS_CS, OUTPUT);  digitalWrite(PIN_ADS_CS, HIGH);
     vePower(true);
     /* Explicit pins prevent SPI from claiming GPIO38 (FSPIWP/GNSS_RX).
      * Without this, SPI.begin() drives GPIO38 LOW and UART RX never works. */
