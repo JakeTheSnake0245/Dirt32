@@ -17,6 +17,7 @@
 #include <driver/gpio.h>   /* gpio_get_level — used by gpsraw */
 #include <esp_idf_version.h>
 #include <soc/gpio_struct.h>  /* GPIO matrix registers — sensorid pin dump */
+#include <soc/gpio_reg.h>     /* GPIO_ENABLE_REG/GPIO_ENABLE1_REG */
 #include "sps_proto.h"
 #include "config.h"
 #include "frontend/FrontEnd.h"
@@ -357,8 +358,8 @@ static void handleCli(String line) {
                                                  PIN_ADXL_INT1 };
                 for (int p : probePins) {
                     uint32_t outSel = GPIO.func_out_sel_cfg[p].func_sel;
-                    bool oe = (p < 32) ? ((GPIO.enable.val >> p) & 1)
-                                       : ((GPIO.enable1.val >> (p - 32)) & 1);
+                    bool oe = (p < 32) ? ((REG_READ(GPIO_ENABLE_REG) >> p) & 1)
+                                       : ((REG_READ(GPIO_ENABLE1_REG) >> (p - 32)) & 1);
                     Serial.printf("  GPIO%-2d level=%d out_sel=%lu oe=%d\n",
                                   p, gpio_get_level((gpio_num_t)p),
                                   (unsigned long)outSel, (int)oe);
