@@ -281,6 +281,7 @@ static void printHelp() {
         "  gpsdiag              low-level GPS wiring/power diagnostic\n"
         "  gpsraw               bare-minimum factory-style UART dump (no powerOff first)\n"
         "  sensorid [secs]      probe sensor chip ID every 1s (default 30) — catches a bus dying after boot\n"
+        "  adxlprobe [secs]     hold ADXL in standby (countdown, default 15s), then enter measurement — for DMM on 1.8V caps\n"
         "  sleep                enter deep sleep now\n"
         "  reboot");
 }
@@ -332,6 +333,15 @@ static void handleCli(String line) {
                 lastPrint = millis();
             }
             if (n == 0) delay(2);
+        }
+    }
+    else if (cmd == "adxlprobe") {
+        uint32_t secs = rest.length() ? (uint32_t)rest.toInt() : 15;
+        if (secs < 3) secs = 3;
+        if (cfg.front_end == FE_ADXL355 && frontEnd) {
+            ((Adxl355FrontEnd *)frontEnd)->measureEntryProbe(secs);
+        } else {
+            Serial.println("[adxlprobe] ADXL355 front-end not active");
         }
     }
     else if (cmd == "sensorid") {

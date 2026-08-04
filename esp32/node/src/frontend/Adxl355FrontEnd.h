@@ -20,6 +20,7 @@ public:
     bool alive() override;
     void powerDown() override;
     static void setSpiHz(uint32_t hz);   /* diagnostic: retry init dead-slow */
+    void measureEntryProbe(uint32_t countdown_s); /* DMM-on-1V8-caps test */
 
 private:
     uint8_t  reg(uint8_t addr);

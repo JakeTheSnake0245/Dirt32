@@ -311,6 +311,36 @@ bool Adxl355FrontEnd::alive() {
     return reg(REG_DEVID_AD) == 0xAD && reg(REG_PARTID) == 0xED;
 }
 
+/* Hold the chip in standby with a countdown (get DMM probes on the PMDZ's
+ * 1.8 V decoupling caps: V1P8ANA / V1P8DIG should read ~1.8 V), then enter
+ * measurement mode and report liveness every 500 ms. If a 1.8 V rail sags
+ * or collapses at entry, the eval board's LDO decoupling is the fault. */
+void Adxl355FrontEnd::measureEntryProbe(uint32_t countdown_s) {
+    uint8_t d = reg(REG_DEVID_AD);
+    if (d != 0xAD) {
+        Serial.printf("[probe] chip not answering (DEVID=0x%02X) — power cycle first\n", d);
+        return;
+    }
+    regWrite(REG_RESET, 0x52); delay(30);
+    regWrite(REG_POWER_CTL, 0x01);   /* standby */
+    Serial.println("[probe] chip in STANDBY. Put DMM on a 1.8V decoupling cap (V1P8ANA/V1P8DIG).");
+    Serial.println("[probe] Expect ~1.8 V now. Watch it as measurement mode starts.");
+    for (uint32_t s = countdown_s; s > 0; s--) {
+        Serial.printf("[probe] entering measurement in %lus... (DEVID=0x%02X)\n",
+                      (unsigned long)s, reg(REG_DEVID_AD));
+        delay(1000);
+    }
+    Serial.println("[probe] >>> POWER_CTL = measure NOW <<<");
+    regWrite(REG_POWER_CTL, 0x04);
+    for (int i = 0; i < 20; i++) {
+        delay(500);
+        uint8_t dd = reg(REG_DEVID_AD);
+        Serial.printf("[probe] +%4dms DEVID=0x%02X %s\n", (i + 1) * 500, dd,
+                      dd == 0xAD ? "alive" : "DEAD");
+    }
+    regWrite(REG_POWER_CTL, 0x01);   /* try to return to standby */
+}
+
 void Adxl355FrontEnd::powerDown() {
     regWrite(REG_POWER_CTL, 0x01); /* standby; Ve will be cut anyway */
 }
