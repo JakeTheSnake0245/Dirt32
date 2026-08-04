@@ -1,0 +1,86 @@
+There's GPIO number and there's physical header position, and they don't match. When I wrote "GPIO48 (J2 pin 14)" I meant the chip's GPIO48, which comes out at the 14th physical position on the J2 header. So:
+
+GPIO14 (a chip pin) → not on any header — it's the LoRa radio's DIO1, internal.
+J2 position 14 (a header slot) → that physical pin carries GPIO48, and it is on the board.
+
+So yes, your V4 has the physical pins I listed — they just aren't labeled 14/15 on the silk. Let me give both numbers so there's no ambiguity:
+
+ADXL signal	Chip GPIO	Header + position
+SCK	GPIO48	J2, 14th pin
+MISO	GPIO4	J3, 15th pin
+MOSI	GPIO33	J2, 12th pin
+CS	GPIO47	J2, 13th pin
+INT1	GPIO6	J3, 17th pin
+
+The two 18-pin headers are J2 and J3 — count the pins along each one to find the position. J2 pin 1 is GND, pin 2 is 5V, and so on down the row; J3 pin 1 is GND, pin 2 is 3V3, etc.
+
+To sanity-check you're on the right row: J2's other end (pins 13–14) is where GPIO47 and GPIO48 sit, and J3's middle-to-end (pins 15, 17) is where GPIO4 and GPIO6 sit. If your board's silkscreen prints the GPIO numbers, just match those — 47, 48, 33, 4, 6 — and ignore the position count entirely.
+
+The thing that genuinely isn't on the board is the LoRa bus — GPIO9, 10, 11 (and 8, 12, 13, 14). Those are the ones you were hunting for and couldn't find, because they never leave the SX1262. Want me to label a quick J2/J3 diagram showing exactly which slot each of those five ADXL pins lands on?
+
+what is the adxl355 pin out numbers. I have 1-12. Not individual pad descriptions on the board
+
+The EVAL-ADXL355-PMDZ has a 12-pin Pmod header (2 rows of 6). Numbered the Pmod way — top row is 1–6, bottom row is 7–12, pin 1 at the keyed/notched corner:
+
+Pin	Signal	Wire to (Heltec V4)
+1	CS (chip select)	GPIO47 — J2 pin 13
+2	MOSI / SDI	GPIO33 — J2 pin 12
+3	MISO / SDO	GPIO4 — J3 pin 15
+4	SCLK	GPIO48 — J2 pin 14
+5	GND	GND
+6	VDD	Ve (switched 3.3 V)
+7	DRDY (data ready)	not used for this firmware
+8	INT1	GPIO6 — J3 pin 17
+9	INT2	not used
+10	(not connected)	—
+11	GND	GND (optional 2nd ground)
+12	VDD	3.3 V (optional 2nd power)
+
+So for your ADXL build you use 7 wires: pins 1, 2, 3, 4 (SPI), 5 (GND), 6 (VDD→Ve), and 8 (INT1). Pins 7, 9, 10 you leave open; 11/12 are just duplicate GND/VDD you can ignore.
+
+Two things to confirm before you power it, since I'm giving you the standard Pmod SPI (Type 2A) layout:
+
+Check the silk on the board edge. The PMDZ prints tiny labels near the header — CS, MOSI, MISO, SCLK, DRDY, INT1, VDD, GND. Match by those labels, not just my pin numbers, in case your rev orders them differently.
+Pin 1 is at the notch/key on the Pmod housing. If your board only has a single 6-pin row (some come depopulated), then it's just pins 1–6 = CS, MOSI, MISO, SCLK, GND, VDD, and you'd lose the INT1 line — which your motion-wake needs, so you'd want the DRDY/INT row populated.
+
+Row 1 (pins 1–6) carries everything except INT1, so if you're wiring from a photo: the SPI four + power/ground are the top row, and INT1 is pin 8 on the bottom row, second from the keyed end.
+
+If you send me a straight-on photo of the header with the silk visible, I'll map each physical pin for your exact board so there's zero guesswork before power-up.
+
+Reconciled component confusion to locate accurate pinout documentation
+Reconciled component confusion to locate accurate pinout documentation
+
+Important flag first: the link you sent is the ADXL355BEZ — the bare chip (a 14-terminal LCC, ~6 mm square), not a 12-pin header board. But your photos earlier showed "EVAL-ADXL355-PMDZ" printed on the blue PCB, and a 12-pin header (1–12) matches the PMDZ, not the bare chip. So you almost certainly have the eval board, and grabbed the chip's Mouser page by mistake. Let me pull the authoritative PMDZ pinout so I'm not guessing on a board with no silk.
+
+Searched the web
+Searched the web
+Claude’s response was interrupted.
+adxl354_adxl355.pdf
+
+PDF
+
+here the doc
+
+Now I have the authoritative source — and it settles it. This datasheet is the bare ADXL355 chip's 14-terminal pinout, which is not what you wire to. But it confirms the signal names, and I can map them to your PMDZ eval board's 12-pin header cleanly.
+
+First, the important correction from the chip's own pin table: the ADXL355 auto-detects SPI vs I2C, and pin 2 is the mode select. Per the datasheet, pin 2 is SCLK/VSSIO — for SPI it's the clock; for I2C you tie it to ground to enable I2C mode. And pin 4 is MISO/ASEL — in I2C it sets the address. So on the bare chip the SPI signal pins are 1=CS/SCL, 2=SCLK, 3=MOSI/SDA, 4=MISO/ASEL. But those are the chip's terminal numbers, not your board's header.
+
+Your EVAL-ADXL355-PMDZ header is a standard 12-pin Pmod, and this is the mapping to use (this is the board layout, which the chip datasheet doesn't show):
+
+PMDZ pin	Signal	Wire to V4 (Option 1, dedicated SPI)
+1	CS	GPIO47 — J2 pin 13
+2	MOSI	GPIO33 — J2 pin 12
+3	MISO	GPIO4 — J3 pin 15
+4	SCLK	GPIO48 — J2 pin 14
+5	GND	GND
+6	VDD	Ve (switched 3.3 V)
+7	(reserved)	leave open
+8	INT1	GPIO6 — J3 pin 17
+9	INT2	leave open
+10	—	—
+11	GND	(optional)
+12	VDD	(optional)
+
+Seven wires: pins 1, 2, 3, 4, 5, 6, 8.
+
+The one thing to verify, because I want to be honest about where the uncertainty is: I'm confident on the ADXL355 signal set and on the V4 GPIO/header positions (both from datasheets now). What I can't 100%-confirm without eyes on your specific PMDZ silk is the exact
