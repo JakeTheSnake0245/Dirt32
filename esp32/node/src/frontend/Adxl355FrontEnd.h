@@ -8,8 +8,8 @@
 
 class Adxl355FrontEnd : public FrontEnd {
 public:
-    Adxl355FrontEnd(SPIClass &spi, int cs_pin, int int1_pin)
-        : _spi(spi), _cs(cs_pin), _int1(int1_pin) {}
+    Adxl355FrontEnd(SPIClass &spi, int cs_pin, int int1_pin, int miso_pin = -1)
+        : _spi(spi), _cs(cs_pin), _int1(int1_pin), _miso(miso_pin) {}
 
     bool begin(uint16_t sample_rate_hz) override;
     size_t read(int16_t *out, size_t max) override;
@@ -26,7 +26,8 @@ private:
     uint8_t  regAt(uint8_t addr, uint32_t hz);
     void     regWrite(uint8_t addr, uint8_t val);
     void     burstRead(uint8_t addr, uint8_t *buf, size_t n);
+    void     postMortem();   /* after a bus death: who is driving MISO? */
 
     SPIClass &_spi;
-    int _cs, _int1;
+    int _cs, _int1, _miso;
 };

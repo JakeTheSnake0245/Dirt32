@@ -15,6 +15,8 @@ static const uint8_t REG_INT_MAP    = 0x2A;
 static const uint8_t REG_RANGE      = 0x2C;
 static const uint8_t REG_POWER_CTL  = 0x2D;
 static const uint8_t REG_SELFTEST   = 0x2E;
+static const uint8_t REG_STATUS     = 0x04;  /* bit4 = NVM_BUSY */
+static const uint8_t REG_RESET      = 0x2F;  /* write 0x52 = soft reset */
 
 /* Bus clock is adjustable at runtime: chip observed latching at measurement
  * entry; if the whole init sequence at 100 kHz survives, the root cause is
@@ -73,6 +75,26 @@ bool Adxl355FrontEnd::begin(uint16_t sample_rate_hz) {
     }
     Serial.println("[adxl355] ID OK (0xAD/0xED)");
 
+    /* Soft-reset the chip (reg 0x2F <- 0x52) and wait for its internal
+     * NVM/fuse reload (STATUS bit4 NVM_BUSY) to finish before configuring.
+     * The datasheet warns that improper power cycling can leave the part in
+     * a corrupt state causing "lost communications" — a soft reset is the
+     * only way to clear that without a full supply drain. */
+    regWrite(REG_RESET, 0x52);
+    delay(30);
+    uint8_t d2 = reg(REG_DEVID_AD);
+    if (d2 != 0xAD) {
+        Serial.printf("[adxl355] BUS DIED after soft RESET (DEVID now 0x%02X)\n", d2);
+        postMortem();
+        return false;
+    }
+    uint32_t t0 = millis();
+    uint8_t st;
+    while (((st = reg(REG_STATUS)) & 0x10) && millis() - t0 < 200) delay(2);
+    Serial.printf("[adxl355] alive after RESET; STATUS=0x%02X (NVM_BUSY %s, %lums)\n",
+                  st, (st & 0x10) ? "STUCK" : "clear",
+                  (unsigned long)(millis() - t0));
+
     /* Bisect instrumentation: the chip has been observed answering the ID
      * reads above and then going permanently silent (0x00) moments later.
      * Re-verify the ID after EVERY config transaction to catch the exact
@@ -82,6 +104,7 @@ bool Adxl355FrontEnd::begin(uint16_t sample_rate_hz) {
         if (d != 0xAD) {
             Serial.printf("[adxl355] BUS DIED after %s (DEVID now 0x%02X)\n",
                           after, d);
+            postMortem();
             return false;
         }
         Serial.printf("[adxl355] alive after %s\n", after);
@@ -178,6 +201,34 @@ bool Adxl355FrontEnd::selfTest() {
     if (delta < 0) delta = -delta;
     /* ±2 g over 16-bit => ~0.1 g ≈ 1638 counts; accept a broad window */
     return delta > 400;
+}
+
+/* After a bus death: classify the failure by looking at who drives MISO.
+ *  - MISO follows the pull (high w/ pullup, low w/ pulldown) with CS HIGH
+ *    and stays 0x00 on reads -> chip has RELEASED the bus = internal
+ *    brownout/latch (interface unpowered).
+ *  - MISO pinned LOW regardless of pull -> chip (or a short) is actively
+ *    driving the line = interface alive but insane, or hardware short. */
+void Adxl355FrontEnd::postMortem() {
+    uint8_t d100 = regAt(REG_DEVID_AD, 100000);
+    uint8_t s100 = regAt(REG_STATUS, 100000);
+    Serial.printf("[postmortem] @100kHz DEVID=0x%02X STATUS=0x%02X\n", d100, s100);
+    if (_miso >= 0) {
+        digitalWrite(_cs, HIGH);
+        pinMode(_miso, INPUT_PULLUP);  delayMicroseconds(50);
+        int up = digitalRead(_miso);
+        pinMode(_miso, INPUT_PULLDOWN); delayMicroseconds(50);
+        int dn = digitalRead(_miso);
+        pinMode(_miso, INPUT);
+        Serial.printf("[postmortem] MISO idle (CS high): pullup->%d pulldown->%d  %s\n",
+                      up, dn,
+                      (up == 1 && dn == 0) ? "= chip RELEASED bus (tri-state; interface browned out)"
+                    : (up == 0 && dn == 0) ? "= line PINNED LOW (chip driving, or short to GND)"
+                    : (up == 1 && dn == 1) ? "= line PINNED HIGH (short to a supply?)"
+                                           : "= inconsistent");
+    }
+    int i1 = digitalRead(_int1);
+    Serial.printf("[postmortem] INT1 level: %d\n", i1);
 }
 
 /* ID read at an arbitrary SPI clock — used to distinguish a marginal

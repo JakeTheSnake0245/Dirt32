@@ -628,7 +628,7 @@ void setup() {
      * so the old shared-bus wiring is physically impossible. */
     static SPIClass sensorSPI(HSPI);
     sensorSPI.begin(PIN_SENS_SCK, PIN_SENS_MISO, PIN_SENS_MOSI, /*SS*/-1);
-    static Adxl355FrontEnd adxl(sensorSPI, PIN_ADXL_CS, PIN_ADXL_INT1);
+    static Adxl355FrontEnd adxl(sensorSPI, PIN_ADXL_CS, PIN_ADXL_INT1, PIN_SENS_MISO);
     static GeophoneFrontEnd geo(sensorSPI, PIN_ADS_CS, PIN_ADS_DRDY);
     frontEnd = (cfg.front_end == FE_ADXL355)
                    ? (FrontEnd *)&adxl : (FrontEnd *)&geo;
