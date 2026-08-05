@@ -1,0 +1,64 @@
+unit name "dirt32-gateway~" escaped as "dirt32-gateway\x7e" (maybe you should use systemd-escape?).
+Failed to restart dirt32-gateway\x7e.service: Unit dirt32-gateway\x7e.service not found.
+krakenrf@krakensdr:~/Dirt32 $ sudo bash linux/install.sh
+sudo systemctl restart dirt32-gateway
+== packages (python3 is stdlib-only; mosquitto is the MQTT broker) ==
+== user + directories ==
+== config ==
+== mosquitto (localhost-only by default — see README to open to the LAN) ==
+Synchronizing state of mosquitto.service with SysV service script with /lib/systemd/systemd-sysv-install.
+Executing: /lib/systemd/systemd-sysv-install enable mosquitto
+== service ==
+
+Done. Web GUI: http://192.168.8.115:9000
+MQTT:          mosquitto_sub -t 'dirt32/#' -v
+Logs:          journalctl -u dirt32-gateway -f
+krakenrf@krakensdr:~/Dirt32 $ systemctl status dirt32-gateway
+journalctl -u dirt32-gateway -n 30
+● dirt32-gateway.service - Dirt32 perimeter gateway (ingest + MQTT + web GUI)
+     Loaded: loaded (/etc/systemd/system/dirt32-gateway.service; enabled; preset: enabled)
+     Active: active (running) since Wed 2026-08-05 19:24:53 BST; 4s ago
+   Main PID: 842148 (python3)
+      Tasks: 3 (limit: 9573)
+        CPU: 118ms
+     CGroup: /system.slice/dirt32-gateway.service
+             └─842148 /usr/bin/python3 -m dirt32_gateway.main /etc/dirt32/gateway.json
+
+Aug 05 19:24:53 krakensdr systemd[1]: Started dirt32-gateway.service - Dirt32 perimeter gateway (ingest + MQTT + web GU>
+Aug 05 19:24:53 krakensdr python3[842148]: [cfg] loaded /etc/dirt32/gateway.json
+Aug 05 19:24:53 krakensdr python3[842148]: [cfg] 2 node key(s) loaded
+Aug 05 19:24:53 krakensdr python3[842148]: [serial] opened /dev/ttyACM0
+Aug 05 19:24:53 krakensdr python3[842148]: [web] GUI on http://0.0.0.0:9000
+Aug 05 19:24:53 krakensdr python3[842148]: [serial] bridge ready — syncing radio config
+lines 1-15/15 (END)
+Aug 05 19:16:23 krakensdr systemd[1]: Stopping dirt32-gateway.service - Dirt32 perimeter gateway (ingest + MQTT + web G>
+Aug 05 19:16:23 krakensdr systemd[1]: dirt32-gateway.service: Deactivated successfully.
+Aug 05 19:16:23 krakensdr systemd[1]: Stopped dirt32-gateway.service - Dirt32 perimeter gateway (ingest + MQTT + web GU>
+Aug 05 19:16:23 krakensdr systemd[1]: dirt32-gateway.service: Consumed 10.070s CPU time.
+Aug 05 19:16:23 krakensdr systemd[1]: Started dirt32-gateway.service - Dirt32 perimeter gateway (ingest + MQTT + web GU>
+Aug 05 19:16:23 krakensdr python3[840225]: [cfg] loaded /etc/dirt32/gateway.json
+Aug 05 19:16:23 krakensdr python3[840225]: [cfg] 2 node key(s) loaded
+Aug 05 19:16:23 krakensdr python3[840225]: [serial] opened /dev/ttyACM0
+Aug 05 19:16:23 krakensdr python3[840225]: [web] GUI on http://0.0.0.0:9000
+Aug 05 19:16:23 krakensdr python3[840225]: [serial] bridge ready — syncing radio config
+Aug 05 19:22:41 krakensdr systemd[1]: Stopping dirt32-gateway.service - Dirt32 perimeter gateway (ingest + MQTT + web G>
+Aug 05 19:22:41 krakensdr systemd[1]: dirt32-gateway.service: Deactivated successfully.
+Aug 05 19:22:41 krakensdr systemd[1]: Stopped dirt32-gateway.service - Dirt32 perimeter gateway (ingest + MQTT + web GU>
+Aug 05 19:22:41 krakensdr systemd[1]: Started dirt32-gateway.service - Dirt32 perimeter gateway (ingest + MQTT + web GU>
+Aug 05 19:22:41 krakensdr python3[841270]: [cfg] loaded /etc/dirt32/gateway.json
+Aug 05 19:22:41 krakensdr python3[841270]: [cfg] 2 node key(s) loaded
+Aug 05 19:22:41 krakensdr python3[841270]: [serial] opened /dev/ttyACM0
+Aug 05 19:22:41 krakensdr python3[841270]: [web] GUI on http://0.0.0.0:9000
+Aug 05 19:22:41 krakensdr python3[841270]: [serial] bridge ready — syncing radio config
+Aug 05 19:23:04 krakensdr python3[841270]: [DEPLOY] node=2 batt=0mV flags=0xe0 lat=39.01050 lon=-77.42020 (fallback)
+Aug 05 19:23:04 krakensdr python3[841270]: [mqtt] connected to 127.0.0.1:1883
+Aug 05 19:24:53 krakensdr systemd[1]: Stopping dirt32-gateway.service - Dirt32 perimeter gateway (ingest + MQTT + web G>
+Aug 05 19:24:53 krakensdr systemd[1]: dirt32-gateway.service: Deactivated successfully.
+Aug 05 19:24:53 krakensdr systemd[1]: Stopped dirt32-gateway.service - Dirt32 perimeter gateway (ingest + MQTT + web GU>
+Aug 05 19:24:53 krakensdr systemd[1]: Started dirt32-gateway.service - Dirt32 perimeter gateway (ingest + MQTT + web GU>
+Aug 05 19:24:53 krakensdr python3[842148]: [cfg] loaded /etc/dirt32/gateway.json
+Aug 05 19:24:53 krakensdr python3[842148]: [cfg] 2 node key(s) loaded
+Aug 05 19:24:53 krakensdr python3[842148]: [serial] opened /dev/ttyACM0
+Aug 05 19:24:53 krakensdr python3[842148]: [web] GUI on http://0.0.0.0:9000
+
+krakenrf@krakensdr:~/Dirt32 $ 
