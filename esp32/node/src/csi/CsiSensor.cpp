@@ -207,7 +207,12 @@ CsiEvent CsiSensor::poll() {
             continue;
         }
 
-        float metric = (_baseline > 1e-9f) ? var / _baseline : 0.0f;
+        /* Floor the baseline: a very clean link can calibrate to var~0,
+         * and dividing by ~0 must mean "extremely sensitive", never
+         * "deaf". (An earlier guard returned metric=0 here, which muted
+         * the radar entirely on quiet bench links.) */
+        float b = (_baseline > 1e-4f) ? _baseline : 1e-4f;
+        float metric = var / b;
         _lastMetric = metric;
 
         uint32_t now = millis();
