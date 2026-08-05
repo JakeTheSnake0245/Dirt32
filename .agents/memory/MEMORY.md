@@ -5,4 +5,5 @@
 - [Heltec V4 sensor SPI bus](v4-sensor-spi-bus.md) — GPIO9/10/11 are internal LoRa-only (no header pads); sensors use dedicated HSPI SCK=48/MISO=4/MOSI=45, ADS CS=46/DRDY=3.
 - [SX126x new-packet detection](sx126x-rx-polling.md) — never poll getPacketLength() for new packets (stays nonzero forever); DIO1 RX-done IRQ only, else "works exactly once".
 - [SPI clamping GPIO38 (GNSS_RX)](spi-gpio38-conflict.md) — SPI.begin() without explicit pins drives GPIO38 LOW via FSPIWP; must use SPI.begin(9,11,10,-1).
+- [Clamped MISO vs dead chip](miso-clamp-lesson.md) — blind-write revive + pull-test = output-pin short, not dead chip; 2×6 Pmod headers short pairs 3/9 etc. on one breadboard row group.
 - [Heltec V4.3 GPS — manufacturer method only](uart2-gps.md) — Serial1, RX=38/TX=39, EN=34 HIGH, RESET=42 HIGH, no pulses/standby/Serial2; require >100 sustained bytes before any UART conclusion; watch for stale-flash false negatives.
