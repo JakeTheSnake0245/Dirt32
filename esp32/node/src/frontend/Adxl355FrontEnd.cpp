@@ -163,17 +163,30 @@ bool Adxl355FrontEnd::begin(uint16_t sample_rate_hz) {
          * is shorted to MISO — a wiring fault, not a chip fault. */
         regWrite(REG_POWER_CTL, 0x01);  delay(10);
         if (reg(REG_DEVID_AD) == 0xAD) {
-            Serial.println("[adxl355] revived by standby write — MISO clamp confirmed. Retrying measure with DRDY ENABLED (0x02)...");
-            regWrite(REG_POWER_CTL, 0x02);  delay(20);
-            uint8_t d2 = reg(REG_DEVID_AD);
-            if (d2 == 0xAD) {
-                Serial.println("[adxl355] >>> ALIVE in measurement with DRDY enabled <<<");
-                Serial.println("[adxl355] VERDICT: the DRDY pad (PMDZ pin 10) is shorted/bridged to MISO (PMDZ pin 3).");
-                Serial.println("[adxl355] DRDY_OFF forces DRDY LOW, clamping MISO. Fix the wiring; running with DRDY on for now.");
-                delay(200);
-                return still("measure DRDY-on +200ms");
+            /* EngineerZone "ADXL355 output stuck at zero": a known,
+             * ADI-unexplained failure class where the part reads zeros until
+             * a standby->measurement TOGGLE clears it — sometimes several
+             * attempts. Toggle persistently, cycling POWER_CTL variants:
+             * 0x06 (TEMP_OFF|DRDY_OFF), 0x02 (TEMP_OFF), 0x00 (plain). */
+            Serial.println("[adxl355] revived by standby write — chip alive, reads clamp only in measurement.");
+            static const uint8_t variants[] = { 0x06, 0x02, 0x00 };
+            for (int attempt = 0; attempt < 9; attempt++) {
+                uint8_t v = variants[attempt % 3];
+                regWrite(REG_POWER_CTL, 0x01);  delay(20);   /* standby */
+                regWrite(REG_POWER_CTL, v);     delay(30);   /* measure */
+                uint8_t d2 = reg(REG_DEVID_AD);
+                Serial.printf("[adxl355] toggle %d: measure=0x%02X -> DEVID=0x%02X %s\n",
+                              attempt + 1, v, d2, d2 == 0xAD ? "ALIVE" : "clamped");
+                if (d2 == 0xAD) {
+                    delay(200);
+                    if (still("measure survived toggle +200ms")) {
+                        Serial.printf("[adxl355] >>> RECOVERED via standby/measure toggling (attempt %d, POWER_CTL=0x%02X) <<<\n",
+                                      attempt + 1, v);
+                        return true;
+                    }
+                }
             }
-            Serial.printf("[adxl355] still clamped with DRDY enabled (DEVID=0x%02X) — clamp is INT2/other measurement output, check PMDZ pins 7/9 vs 3\n", d2);
+            Serial.println("[adxl355] 9 toggles, still clamped in measurement every time.");
         }
         return false;
     }
