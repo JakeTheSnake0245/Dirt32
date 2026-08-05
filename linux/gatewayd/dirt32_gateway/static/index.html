@@ -172,14 +172,22 @@ function renderNodes(nodes) {
       btn.textContent = r.ok ? "sent ✓" : "failed";
       setTimeout(() => { btn.disabled = false; btn.textContent = "recal"; }, 4000);
     };
+    const panel = div.querySelector(".settings");
+    if (openSettings.has(n.node_id)) {      // survive the 3s re-render
+      buildSettings(panel, n);
+      panel.style.display = "block";
+    }
     const gear = div.querySelector("button.gear");
     gear.onclick = (ev) => {
       ev.stopPropagation();
-      const panel = div.querySelector(".settings");
       if (panel.style.display === "none") {
+        openSettings.add(n.node_id);
         buildSettings(panel, n);
         panel.style.display = "block";
-      } else panel.style.display = "none";
+      } else {
+        openSettings.delete(n.node_id);
+        panel.style.display = "none";
+      }
     };
     list.appendChild(div);
   }
@@ -211,6 +219,8 @@ async function authedPost(path, body) {
 
 // Per-node remote settings (sent over LoRa; the node validates, saves to
 // flash, and heartbeats back as confirmation).
+const openSettings = new Set();          // node ids with panel open
+const draftValues = {};                  // "nodeId:param" -> typed value
 const SETTINGS = [
   { param: "csi_threshold",      label: "radar sensitivity threshold", step: 0.1,  csi: true,
     hint: "trigger at metric ≥ this; lower = more sensitive (default 2.0)" },
@@ -240,6 +250,9 @@ function buildSettings(panel, n) {
       `<input type="number" step="${s.step}" placeholder="—">` +
       `<button>set</button>`;
     const inp = row.querySelector("input"), b = row.querySelector("button");
+    const dk = `${n.node_id}:${s.param}`;
+    if (draftValues[dk] !== undefined) inp.value = draftValues[dk];
+    inp.oninput = () => { draftValues[dk] = inp.value; };
     b.onclick = async () => {
       const v = parseFloat(inp.value);
       if (isNaN(v)) { b.textContent = "?"; setTimeout(() => b.textContent = "set", 1500); return; }
