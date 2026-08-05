@@ -45,12 +45,13 @@ static void IRAM_ATTR csi_rx_cb(void *ctx, wifi_csi_info_t *info) {
      * to be our 8-byte ESP-NOW pings — beacons are legacy too but run
      * 100+ bytes, so the length gate rejects them. */
     if (info->rx_ctrl.sig_mode != 0) { s_instance->countHt(); return; }
-    /* ESP-NOW pings are vendor action frames: MAC header + action fields +
-     * vendor payload + FCS lands well under 100 bytes even with our 8-byte
-     * payload; beacons run 150-300+. 100 keeps the input homogeneous while
-     * not starving on real ping sizes (the earlier 64 gate was too tight
-     * and rejected peer pings — ~0.5 fps instead of ~10). */
-    if (info->rx_ctrl.sig_len > 100) {
+    /* ESP-NOW pings are vendor action frames. Bench-measured on IDF 5.x
+     * (ESP-NOW v2 framing): our 8-byte-payload pings arrive at sig_len
+     * = 123 B — not the <100 B that v1 overhead math suggested, which is
+     * why earlier gates (64, then 100) starved the detector to ~2 fps.
+     * Beacons run 150-340+ B (bench-measured min 150+). 135 sits in the
+     * gap: full ping stream in, beacons still out. */
+    if (info->rx_ctrl.sig_len > 135) {
         s_instance->countBig(info->rx_ctrl.sig_len);
         return;
     }
