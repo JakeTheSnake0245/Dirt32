@@ -1049,9 +1049,13 @@ void loop() {
         csi.service();
         static bool wasCalib = true;
         bool calib = csi.calibrating();
-        if (wasCalib && !calib)
+        if (wasCalib && !calib) {
             Serial.printf("[csi] calibration done — baseline noise=%u (x100)\n",
                           csi.noiseX100());
+            /* Announce immediately so the GUI clears "calibrating" now
+             * instead of at the next scheduled heartbeat (up to an hour). */
+            if (radioOk) sendHeartbeat();
+        }
         wasCalib = calib;
         CsiEvent e = csi.poll();
         if (e.triggered) {
