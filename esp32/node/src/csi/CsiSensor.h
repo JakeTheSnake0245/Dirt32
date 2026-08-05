@@ -51,6 +51,13 @@ public:
     float    metric() const      { return _lastMetric; }  /* for CLI tuning */
     uint32_t frameCount() const  { return _frames; }
     uint32_t dropCount() const   { return _drops; }   /* ring overruns */
+    /* Reject diagnostics — why CSI callbacks didn't become frames. */
+    uint32_t cbCount() const     { return _cbTotal; } /* callback invocations */
+    uint32_t rejHtCount() const  { return _rejHT; }   /* HT/VHT frames */
+    uint32_t rejBigCount() const { return _rejBig; }  /* sig_len > ping gate */
+    void countCb()   { _cbTotal = _cbTotal + 1; }
+    void countHt()   { _rejHT = _rejHT + 1; }
+    void countBig()  { _rejBig = _rejBig + 1; }
 
     /* Suspend/resume ping TX around LoRa activity (coexistence: keeps the
        radio quiet while an alert burst + ACK window is in flight). */
@@ -99,6 +106,9 @@ private:
     uint32_t _lastPingMs = 0;
     volatile uint32_t _frames = 0;
     volatile uint32_t _drops = 0;   /* ring-full drops (calibration validity) */
+    volatile uint32_t _cbTotal = 0;
+    volatile uint32_t _rejHT = 0;
+    volatile uint32_t _rejBig = 0;
 
     /* ring of per-frame spatial turbulence values (written from WiFi task,
        read from loop; single-writer single-reader, index race is benign) */

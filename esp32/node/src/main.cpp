@@ -415,6 +415,12 @@ static void handleCli(String line) {
                       (unsigned long)csi.frameCount(),
                       (unsigned long)csi.dropCount(), csi.noiseX100(),
                       cfg.csi_threshold);
+        Serial.printf("[csi] rx diag: callbacks=%lu accepted=%lu rejHT=%lu "
+                      "rejBig=%lu\n",
+                      (unsigned long)csi.cbCount(),
+                      (unsigned long)csi.frameCount(),
+                      (unsigned long)csi.rejHtCount(),
+                      (unsigned long)csi.rejBigCount());
         uint32_t secs = rest.isEmpty() ? 0 : (uint32_t)rest.toInt();
         if (secs > 0) {
             Serial.printf("[csi] streaming metric for %lus (trigger at %.1f)\n",

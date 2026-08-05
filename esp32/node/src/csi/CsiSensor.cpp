@@ -36,6 +36,7 @@ static const uint8_t BCAST[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 static void IRAM_ATTR csi_rx_cb(void *ctx, wifi_csi_info_t *info) {
     (void)ctx;
     if (!s_instance || !info || !info->buf || info->len < 8) return;
+    s_instance->countCb();
 
     /* Homogeneous input domain: the detector's moving variance assumes one
      * stationary signal. Mixing legacy ESP-NOW pings with ambient HT
@@ -43,13 +44,13 @@ static void IRAM_ATTR csi_rx_cb(void *ctx, wifi_csi_info_t *info) {
      * (false positives). Accept only non-HT (legacy) frames short enough
      * to be our 8-byte ESP-NOW pings — beacons are legacy too but run
      * 100+ bytes, so the length gate rejects them. */
-    if (info->rx_ctrl.sig_mode != 0) return;      /* HT/VHT frame — skip */
+    if (info->rx_ctrl.sig_mode != 0) { s_instance->countHt(); return; }
     /* ESP-NOW pings are vendor action frames: MAC header + action fields +
      * vendor payload + FCS lands well under 100 bytes even with our 8-byte
      * payload; beacons run 150-300+. 100 keeps the input homogeneous while
      * not starving on real ping sizes (the earlier 64 gate was too tight
      * and rejected peer pings — ~0.5 fps instead of ~10). */
-    if (info->rx_ctrl.sig_len > 100) return;      /* too big to be a ping */
+    if (info->rx_ctrl.sig_len > 100) { s_instance->countBig(); return; }
 
     /* info->buf is interleaved int8 imag/real pairs. Use the middle
      * subcarriers (skip guard/DC region at both ends). */
