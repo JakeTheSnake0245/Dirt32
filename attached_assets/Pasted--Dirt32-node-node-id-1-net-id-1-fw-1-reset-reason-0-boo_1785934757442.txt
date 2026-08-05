@@ -1,0 +1,66 @@
+=== Dirt32 node ===
+node_id=1 net_id=1 fw=1 reset_reason=0
+[boot] radio init...
+[boot] radio OK
+[boot] sensor rail + SPI...
+[boot] sensor front-end init...
+[adxl355] ID OK (0xAD/0xED)
+[adxl355] alive after RESET; STATUS=0x00 (NVM_BUSY clear, 0ms)
+[adxl355] NVM shadow 0x50-0x5E: D4 80 81 84 41 98 27 25 02 1B BF 70 00 11 F2  (14 nonzero)
+[adxl355] alive after POWER_CTL=standby
+[adxl355] alive after RANGE=2g
+[adxl355] RANGE readback: 0x01 (want 0x01) OK
+[adxl355] alive after FILTER/ODR
+[adxl355] BUS DIED after POWER_CTL=measure+DRDY_OFF (+20ms) (DEVID now 0x00)
+[postmortem] @100kHz DEVID=0x00 STATUS=0x00
+[postmortem] MISO idle (CS high): pullup->0 pulldown->0  = line PINNED LOW (chip driving, or short to GND)
+[postmortem] INT1 level: 0
+[postmortem] BLIND STANDBY WRITE REVIVED IT -> chip was never dead!
+[postmortem] MISO is clamped by a measurement-mode output.
+[postmortem] CHECK: short between PMDZ pin 3 (MISO) and pin 9 (DRDY)
+[postmortem]        (also pins 7 INT1 / 8 INT2 / adjacent breadboard rows)
+[adxl355] revived by standby write — chip alive, reads clamp only in measurement.
+[adxl355] toggle 1: measure=0x06 -> DEVID=0x00 clamped
+[adxl355] toggle 2: measure=0x02 -> DEVID=0x00 clamped
+[adxl355] toggle 3: measure=0x00 -> DEVID=0x00 clamped
+[adxl355] toggle 4: measure=0x06 -> DEVID=0x00 clamped
+[adxl355] toggle 5: measure=0x02 -> DEVID=0x00 clamped
+[adxl355] toggle 6: measure=0x00 -> DEVID=0x00 clamped
+[adxl355] toggle 7: measure=0x06 -> DEVID=0x00 clamped
+[adxl355] toggle 8: measure=0x02 -> DEVID=0x00 clamped
+[adxl355] toggle 9: measure=0x00 -> DEVID=0x00 clamped
+[adxl355] 9 toggles, still clamped in measurement every time.
+[sensor] init FAILED — cycling Ve rail (2s off) and retrying...
+[sensor] retrying full init at 100 kHz SPI (signal-integrity test)...
+[adxl355] SPI clock set to 100000 Hz
+[adxl355] ID OK (0xAD/0xED)
+[adxl355] alive after RESET; STATUS=0x00 (NVM_BUSY clear, 1ms)
+[adxl355] NVM shadow 0x50-0x5E: D4 80 81 84 41 98 27 25 02 1B BF 70 00 11 F2  (14 nonzero)
+[adxl355] alive after POWER_CTL=standby
+[adxl355] alive after RANGE=2g
+[adxl355] RANGE readback: 0x01 (want 0x01) OK
+[adxl355] alive after FILTER/ODR
+[adxl355] BUS DIED after POWER_CTL=measure+DRDY_OFF (+20ms) (DEVID now 0x00)
+[postmortem] @100kHz DEVID=0x00 STATUS=0x00
+[postmortem] MISO idle (CS high): pullup->0 pulldown->0  = line PINNED LOW (chip driving, or short to GND)
+[postmortem] INT1 level: 0
+[postmortem] BLIND STANDBY WRITE REVIVED IT -> chip was never dead!
+[postmortem] MISO is clamped by a measurement-mode output.
+[postmortem] CHECK: short between PMDZ pin 3 (MISO) and pin 9 (DRDY)
+[postmortem]        (also pins 7 INT1 / 8 INT2 / adjacent breadboard rows)
+[adxl355] revived by standby write — chip alive, reads clamp only in measurement.
+[adxl355] toggle 1: measure=0x06 -> DEVID=0x00 clamped
+[adxl355] toggle 2: measure=0x02 -> DEVID=0x00 clamped
+[adxl355] toggle 3: measure=0x00 -> DEVID=0x00 clamped
+[adxl355] toggle 4: measure=0x06 -> DEVID=0x00 clamped
+[adxl355] toggle 5: measure=0x02 -> DEVID=0x00 clamped
+[adxl355] toggle 6: measure=0x00 -> DEVID=0x00 clamped
+[adxl355] toggle 7: measure=0x06 -> DEVID=0x00 clamped
+[adxl355] toggle 8: measure=0x02 -> DEVID=0x00 clamped
+[adxl355] toggle 9: measure=0x00 -> DEVID=0x00 clamped
+[adxl355] 9 toggles, still clamped in measurement every time.
+[sensor] still dead after Ve cycle -> VDD likely NOT on the Ve rail (check for 3V3 pin), or chip damaged
+[sensor] front-end init FAILED (taptest still works)
+[boot] detector init...
+Bench mode — CLI active. `help` for commands.
+Press PRG button (or `screen`) for the link-debug display.
