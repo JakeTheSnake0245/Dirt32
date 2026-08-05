@@ -77,8 +77,15 @@ bool LoRaLink::waitForAck(uint32_t seq, uint16_t window_ms) {
     return false;
 }
 
+int LoRaLink::guardedTransmit(const uint8_t *frame, size_t len) {
+    if (_txGuard) _txGuard(true);
+    int state = _radio->transmit(const_cast<uint8_t *>(frame), len);
+    if (_txGuard) _txGuard(false);
+    return state;
+}
+
 bool LoRaLink::sendOnce(const uint8_t *frame, size_t len) {
-    bool ok = _radio->transmit(const_cast<uint8_t *>(frame), len) == RADIOLIB_ERR_NONE;
+    bool ok = guardedTransmit(frame, len) == RADIOLIB_ERR_NONE;
     if (_listening) startListen();   /* resume continuous RX after TX */
     return ok;
 }
@@ -92,7 +99,7 @@ TxOutcome LoRaLink::sendReliable(const uint8_t *frame, size_t len, uint32_t seq)
                               (span ? (esp_random() % span) : 0);
             delay(jitter);
         }
-        int state = _radio->transmit(const_cast<uint8_t *>(frame), len);
+        int state = guardedTransmit(frame, len);
         if (state != RADIOLIB_ERR_NONE) {
             if (attempt + 1 == _cfg->retx_count) { out = TxOutcome::RADIO_ERROR; break; }
             continue;

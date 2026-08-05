@@ -214,11 +214,10 @@ static uint32_t nowUnix(const GpsFix &fix) {
 
 /* ---------- TX paths ---------- */
 static void sendAlert(uint8_t event_class, uint8_t confidence, uint16_t peak) {
-#if SPS_CSI_ENABLE
-    /* Coexistence: hold our ESP-NOW pings while the LoRa alert burst +
-     * ACK window is in flight so both transmitters never key up together. */
-    csi.pauseTraffic(true);
-#endif
+    /* Coexistence note: ESP-NOW pings are held only around the actual LoRa
+     * transmit bursts via the LoRaLink TX guard (set in setup()), not for
+     * the whole reliable-send call — pausing through the ACK-wait window
+     * starved the WiFi radar whenever alerts were frequent. */
     sps_alert_t a = {
         .timestamp = nowUnix(GpsFix{}),
         .event_class = event_class,
@@ -228,23 +227,15 @@ static void sendAlert(uint8_t event_class, uint8_t confidence, uint16_t peak) {
     };
     uint8_t frame[SPS_MAX_FRAME];
     uint32_t seq = nextSeq();
-    if (seq == 0) goto out;   /* SEQ exhausted or NVS failure — never reuse a nonce */
-    {
-        int n = sps_seal_alert(cfg.psk, cfg.net_id, cfg.node_id, seq, &a,
-                               frame, sizeof(frame));
-        if (n <= 0) { Serial.printf("[alert] seal err %d\n", n); goto out; }
-        TxOutcome outc = link_.sendReliable(frame, (size_t)n, seq);
-        Serial.printf("[alert] seq=%lu class=%u conf=%u peak=%u -> %s\n",
-                      (unsigned long)seq, event_class, confidence, peak,
-                      outc == TxOutcome::ACKED ? "ACKED" :
-                      outc == TxOutcome::SENT_NO_ACK ? "sent (no ack)" : "RADIO ERROR");
-    }
-out:
-#if SPS_CSI_ENABLE
-    csi.pauseTraffic(false);
-#else
-    ;
-#endif
+    if (seq == 0) return;   /* SEQ exhausted or NVS failure — never reuse a nonce */
+    int n = sps_seal_alert(cfg.psk, cfg.net_id, cfg.node_id, seq, &a,
+                           frame, sizeof(frame));
+    if (n <= 0) { Serial.printf("[alert] seal err %d\n", n); return; }
+    TxOutcome outc = link_.sendReliable(frame, (size_t)n, seq);
+    Serial.printf("[alert] seq=%lu class=%u conf=%u peak=%u -> %s\n",
+                  (unsigned long)seq, event_class, confidence, peak,
+                  outc == TxOutcome::ACKED ? "ACKED" :
+                  outc == TxOutcome::SENT_NO_ACK ? "sent (no ack)" : "RADIO ERROR");
 }
 
 static void sendHeartbeat(bool deployFlag = false) {
@@ -846,6 +837,10 @@ void setup() {
     if (cfg.csi_enable) {
         Serial.println("[csi] WiFi radar init (STA, not associated)...");
         csiOk = csi.begin(cfg);
+        if (csiOk)
+            /* Hold ESP-NOW pings only during actual LoRa transmit bursts
+             * (peak-current precaution) — never through ACK-wait windows. */
+            link_.setTxGuard([](bool active) { csi.pauseTraffic(active); });
         if (csiOk)
             Serial.printf("[csi] up: ch=%u role=%s ping=%uHz thresh=%.1f "
                           "window=%u calib=%us — node stays awake while CSI is on\n",

@@ -49,6 +49,14 @@ public:
     int16_t lastRssi() const { return _lastRssi; }
     float   lastSnr() const { return _lastSnr; }
 
+    /* TX guard: called with true right before each LoRa transmit and false
+     * right after it returns. Used to hold ESP-NOW pings ONLY for the
+     * transmit burst (peak-current precaution) — NOT for the ACK-wait RX
+     * window, which is receive-only and costs nothing extra. Pausing for
+     * the whole sendReliable call starved the WiFi radar's ping stream to
+     * <1/s whenever alerts were frequent (bench-verified). */
+    void setTxGuard(void (*guard)(bool active)) { _txGuard = guard; }
+
 private:
     bool waitForAck(uint32_t seq, uint16_t window_ms);
 
@@ -57,6 +65,8 @@ private:
     bool _listening = false;
     sps_replay_t _ackReplay;
     uint32_t _cmdLastSeq = 0;  /* downlink strict-monotonic floor */
+    void (*_txGuard)(bool) = nullptr;
+    int guardedTransmit(const uint8_t *frame, size_t len);
     int16_t _lastRssi = 0;
     float _lastSnr = 0;
 };
