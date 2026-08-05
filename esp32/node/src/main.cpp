@@ -931,8 +931,14 @@ void loop() {
             break;
     }
 
-    /* Geophone continuous-listen profile */
-    if (cfg.front_end == FE_GEOPHONE && sensorOk) {
+    /* Continuous-listen seismic detection:
+     *   - geophone profile (always continuous by design), and
+     *   - ADXL355 nodes held awake by CSI mode — they never enter the armed
+     *     deep-sleep cycle, so without this branch they'd have no seismic
+     *     detection at all. */
+    bool seismicListen = sensorOk &&
+        (cfg.front_end == FE_GEOPHONE || (csiHoldsAwake && cfg.front_end == FE_ADXL355));
+    if (seismicListen) {
         int16_t buf[64];
         size_t n = frontEnd->read(buf, 64);
         for (size_t i = 0; i < n; i++) {
