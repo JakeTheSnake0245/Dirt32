@@ -45,5 +45,10 @@ int main(void) {
     sps_ack_t ack = { .ack_seq = 0x000A0B, .status = SPS_ACK_OK };
     n = sps_seal_ack(key, 7, 0x0102, 0x000A0B, &ack, frame, sizeof(frame));
     hexdump("ack", frame, n);
+
+    /* Gateway->node command: CSI recalibrate (downlink, msg type 0x04) */
+    sps_cmd_t cmd = { .cmd = SPS_CMD_CSI_RECAL, .arg = 0 };
+    n = sps_seal_cmd(key, 7, 0x0102, 0x000101, &cmd, frame, sizeof(frame));
+    hexdump("cmd_recal", frame, n);
     return 0;
 }

@@ -38,7 +38,8 @@ class EventFeed:
             return [e for e in self._buf if e["at"] > t]
 
 
-def make_handler(db: Db, feed: EventFeed, status_cfg: dict):
+def make_handler(db: Db, feed: EventFeed, status_cfg: dict, cmd_sender=None,
+                 api_token=None):
     class Handler(BaseHTTPRequestHandler):
         server_version = "dirt32-gateway"
 
@@ -67,6 +68,41 @@ def make_handler(db: Db, feed: EventFeed, status_cfg: dict):
             self.send_header("Cache-Control", "no-store")
             self.end_headers()
             self.wfile.write(body)
+
+        def _authorized(self) -> bool:
+            """Write actions (POST) need authorization.  If web.api_token is
+            configured, require it via the X-Api-Token header from anywhere;
+            otherwise only loopback clients may POST (GETs stay open)."""
+            if api_token:
+                import hmac
+                tok = self.headers.get("X-Api-Token", "")
+                return hmac.compare_digest(tok, api_token)
+            return self.client_address[0] in ("127.0.0.1", "::1")
+
+        def do_POST(self):
+            # POST /gw/nodes/<id>/recal — push a CSI recalibrate command to
+            # the node over LoRa. Best-effort: success means "transmitted",
+            # confirmation is the node's next heartbeat flipping to
+            # "calibrating".
+            if not self._authorized():
+                self._json({"ok": False, "error":
+                            "unauthorized — set web.api_token in gateway.json"
+                            " and send it as X-Api-Token"}, 401)
+                return
+            u = urlparse(self.path)
+            parts = u.path.rstrip("/").split("/")
+            if (len(parts) >= 4 and parts[-3] == "nodes"
+                    and parts[-1] == "recal" and parts[-2].isdigit()):
+                if cmd_sender is None:
+                    self._json({"ok": False, "error": "no radio link"}, 503)
+                    return
+                node_id = int(parts[-2])
+                ok = bool(cmd_sender(node_id))
+                self._json({"ok": ok} if ok else
+                           {"ok": False, "error": "send failed"},
+                           200 if ok else 502)
+            else:
+                self.send_error(404)
 
         def do_GET(self):
             u = urlparse(self.path)
@@ -134,8 +170,11 @@ def make_handler(db: Db, feed: EventFeed, status_cfg: dict):
     return Handler
 
 
-def serve(db: Db, feed: EventFeed, status_cfg: dict, host="0.0.0.0", port=9000):
-    httpd = ThreadingHTTPServer((host, port), make_handler(db, feed, status_cfg))
+def serve(db: Db, feed: EventFeed, status_cfg: dict, host="0.0.0.0", port=9000,
+          cmd_sender=None, api_token=None):
+    httpd = ThreadingHTTPServer((host, port),
+                                make_handler(db, feed, status_cfg, cmd_sender,
+                                             api_token))
     t = threading.Thread(target=httpd.serve_forever, daemon=True, name="web")
     t.start()
     return httpd

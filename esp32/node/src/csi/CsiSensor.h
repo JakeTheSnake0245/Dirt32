@@ -56,6 +56,15 @@ public:
        radio quiet while an alert burst + ACK window is in flight). */
     void pauseTraffic(bool paused) { _paused = paused; }
 
+    /* Restart baseline calibration (gateway CSI_RECAL command or local
+       re-baseline). Keep the area clear for csi_calib_s afterwards. */
+    void recalibrate() {
+        _baseline = 0; _calibSamples = 0;
+        _winLen = 0; _winPos = 0;
+        _inEvent = false; _holdoffUntil = 0;
+        _lastMetric = 0;
+    }
+
     /* Called from the CSI RX callback (WiFi task context) — one per-frame
        spatial-turbulence value into the ring. Not for application use. */
     void ingestTurbulence(float t) {

@@ -42,6 +42,10 @@
   .ev.alert { border-left: 3px solid var(--red); background: #16100f; }
   .ev.alert.wifi { border-left: 3px solid var(--cyan); background: #0d1418; }
   .csi { color: var(--cyan); }
+  button.recal { background: none; border: 1px solid var(--cyan);
+    color: var(--cyan); font: inherit; font-size: 11px; cursor: pointer;
+    padding: 0 6px; border-radius: 3px; vertical-align: middle; }
+  button.recal:disabled { opacity: 0.5; cursor: default; }
   .ev.heartbeat { border-left: 3px solid #223042; }
   .ev.status { border-left: 3px solid #2a2a1a; color: var(--dim); }
   .leaflet-container { font: inherit; }
@@ -137,12 +141,35 @@ function renderNodes(nodes) {
       ? `<span class="csi"> · ᯤ ${n.csi_calibrating ? "calibrating"
            : "csi " + ((n.csi_noise ?? 0) / 100).toFixed(2)}</span>`
       : "";
+    const recalBtn = n.csi_on
+      ? ` <button class="recal" data-node="${n.node_id}" title=
+"Restart WiFi-radar baseline calibration on this node (keep the area clear ~30s)"
+>recal</button>` : "";
     div.innerHTML =
       `<span class="st" style="color:${COLORS[n.color]}">#${n.node_id}` +
-      `${n.name ? " · " + n.name : ""}</span>` +
+      `${n.name ? " · " + n.name : ""}</span>${recalBtn}` +
       `<div class="meta">${n.reasons.join(" · ")} — seen ${fmtAgo(n.last_seen)}` +
       `${n.battery_mv ? " · " + n.battery_mv + " mV" : ""}${csiMeta}</div>`;
     if (hasPos) div.onclick = () => map.setView([n.lat, n.lon], 17);
+    const btn = div.querySelector("button.recal");
+    if (btn) btn.onclick = async (ev) => {
+      ev.stopPropagation();
+      btn.disabled = true; btn.textContent = "…";
+      try {
+        const post = () => fetch(`${base}/gw/nodes/${n.node_id}/recal`, {
+          method: "POST",
+          headers: localStorage.apiToken
+            ? { "X-Api-Token": localStorage.apiToken } : {} });
+        let resp = await post();
+        if (resp.status === 401) {
+          const t = prompt("API token (web.api_token in gateway.json):");
+          if (t) { localStorage.apiToken = t; resp = await post(); }
+        }
+        const r = await resp.json();
+        btn.textContent = r.ok ? "sent ✓" : "failed";
+      } catch { btn.textContent = "failed"; }
+      setTimeout(() => { btn.disabled = false; btn.textContent = "recal"; }, 4000);
+    };
     list.appendChild(div);
   }
   document.getElementById("cg").textContent = counts.green || 0;

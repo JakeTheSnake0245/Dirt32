@@ -11,6 +11,7 @@ import os
 import sys
 import time
 
+from . import proto
 from .db import Db
 from .ingest import Ingest
 from .mqtt import MqttPublisher
@@ -96,7 +97,10 @@ def main():
         link.start()
 
     httpd = serve(db, feed, cfg["status"],
-                  host=cfg["web"]["host"], port=int(cfg["web"]["port"]))
+                  host=cfg["web"]["host"], port=int(cfg["web"]["port"]),
+                  cmd_sender=lambda nid: ingest.send_cmd(
+                      nid, proto.CMD_CSI_RECAL),
+                  api_token=cfg["web"].get("api_token"))
     print(f"[web] GUI on http://{cfg['web']['host']}:{cfg['web']['port']}")
 
     # periodic: status refresh (silence-based transitions) + MQTT keepalive

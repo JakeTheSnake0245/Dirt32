@@ -104,6 +104,19 @@ static void seqRestore() {
     if (hw == 0) seqReserve(SEQ_CKPT); /* first boot: reserve before any SEQ use */
 }
 
+/* Downlink command anti-replay floor (gateway->node SEQ high-water mark).
+   Persisted so a captured command frame can't be replayed after a reboot. */
+static uint32_t cmdSeqLoad() {
+    Preferences p;
+    uint32_t s = 0;
+    if (p.begin("sps", true)) { s = p.getULong("cmd_seq", 0); p.end(); }
+    return s;
+}
+static void cmdSeqPersist(uint32_t seq) {
+    Preferences p;
+    if (p.begin("sps", false)) { p.putULong("cmd_seq", seq); p.end(); }
+}
+
 /* ---------- Ve sensor power rail (spec §5.2 — verify polarity!) ---------- */
 static SPIClass sensorSPI(HSPI);
 
@@ -877,6 +890,44 @@ void loop() {
 #if SPS_CSI_ENABLE
     csiHoldsAwake = cfg.csi_enable && csiOk;
 #endif
+
+    /* Downlink command RX: while awake, keep the LoRa radio in continuous
+     * receive so the gateway can push commands (e.g. WiFi-radar
+     * recalibrate from the web GUI). Armed deep-sleep nodes are only
+     * reachable during their brief ACK windows, so downlink is best-effort
+     * there; awake modes (bench, CSI, geophone) hear commands anytime. */
+    static bool loraListening = false;
+    if (radioOk && !loraListening) {
+        link_.setCmdSeqFloor(cmdSeqLoad());   /* reboot-safe anti-replay */
+        loraListening = link_.startListen();
+    }
+    if (loraListening) {
+        sps_cmd_t cmd;
+        uint32_t cseq;
+        if (link_.receiveCommand(&cmd, &cseq)) {
+            cmdSeqPersist(cseq);   /* write-ahead: floor survives reboot */
+            Serial.printf("[cmd] gateway command seq=%lu cmd=%u arg=%u\n",
+                          (unsigned long)cseq, cmd.cmd, cmd.arg);
+            if (cmd.cmd == SPS_CMD_CSI_RECAL) {
+#if SPS_CSI_ENABLE
+                if (csiOk && csi.running()) {
+                    csi.recalibrate();
+                    Serial.println("[csi] recalibration started (gateway command)"
+                                   " — keep the area clear");
+                    dbgScreen.showMessage("WIFI RADAR", "recalibrating", nullptr);
+                    /* Confirmation: heartbeat now carries CSI_CALIB. */
+                    sendHeartbeat();
+                } else {
+                    Serial.println("[cmd] CSI_RECAL ignored — WiFi radar not running");
+                }
+#else
+                Serial.println("[cmd] CSI_RECAL ignored — CSI not in this build");
+#endif
+            } else {
+                Serial.printf("[cmd] unknown command %u ignored\n", cmd.cmd);
+            }
+        }
+    }
     if (!autoArmCancelled && !csiHoldsAwake && armAtMs > 0 && sensorOk && radioOk &&
         cfg.front_end == FE_ADXL355) {
         static uint32_t lastCountdown = 0;

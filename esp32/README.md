@@ -435,6 +435,24 @@ passing person yields one clean event. Heartbeats report the quiescent
 baseline (×100) plus CSI-on/calibrating health flags, so the gateway can
 watch the RF noise floor per node.
 
+**Remote recalibration.** Every node's row in the web GUI gets a cyan
+`recal` button while WiFi radar is on. It pushes an encrypted
+`CSI_RECAL` command over LoRa (gateway → bridge → node): the node
+restarts its baseline calibration and immediately heartbeats, so the GUI
+flips to "calibrating" as confirmation. Use it after a rollout — plant
+all nodes, walk out of the field, then recal each node from the hub so
+baselines are learned with the area quiet and every peer already
+pinging. No command ACK: the gateway sends 3 copies (replay window
+dedupes); if the GUI doesn't show "calibrating" within a heartbeat,
+press it again. Commands are received while a node is awake (CSI and
+geophone profiles, or bench mode) — armed deep-sleep seismic nodes are
+not reachable between wakes. Nodes persist the downlink sequence
+high-water mark in NVS, so a captured command frame is dead after a
+reboot too. The recal POST is loopback-only by default; to use it from
+another machine on the LAN, set `"api_token": "<random string>"` in the
+`web` section of `/etc/dirt32/gateway.json` — the GUI will prompt for it
+once and remember it.
+
 **Tuning.** `csi` on the CLI prints status; `csi 30` streams the live
 metric for 30 s — walk the perimeter and pick a threshold ~2× the largest
 quiet-time metric you see. Raise `csi_window_frames` for fewer false

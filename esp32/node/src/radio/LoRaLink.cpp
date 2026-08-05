@@ -78,10 +78,13 @@ bool LoRaLink::waitForAck(uint32_t seq, uint16_t window_ms) {
 }
 
 bool LoRaLink::sendOnce(const uint8_t *frame, size_t len) {
-    return _radio->transmit(const_cast<uint8_t *>(frame), len) == RADIOLIB_ERR_NONE;
+    bool ok = _radio->transmit(const_cast<uint8_t *>(frame), len) == RADIOLIB_ERR_NONE;
+    if (_listening) startListen();   /* resume continuous RX after TX */
+    return ok;
 }
 
 TxOutcome LoRaLink::sendReliable(const uint8_t *frame, size_t len, uint32_t seq) {
+    TxOutcome out = _cfg->ack_enable ? TxOutcome::SENT_NO_ACK : TxOutcome::ACKED;
     for (uint8_t attempt = 0; attempt < _cfg->retx_count; attempt++) {
         if (attempt > 0) {
             uint32_t span = _cfg->retx_jitter_max_ms - _cfg->retx_jitter_min_ms;
@@ -91,11 +94,59 @@ TxOutcome LoRaLink::sendReliable(const uint8_t *frame, size_t len, uint32_t seq)
         }
         int state = _radio->transmit(const_cast<uint8_t *>(frame), len);
         if (state != RADIOLIB_ERR_NONE) {
-            if (attempt + 1 == _cfg->retx_count) return TxOutcome::RADIO_ERROR;
+            if (attempt + 1 == _cfg->retx_count) { out = TxOutcome::RADIO_ERROR; break; }
             continue;
         }
-        if (_cfg->ack_enable && waitForAck(seq, _cfg->ack_window_ms))
-            return TxOutcome::ACKED;
+        if (_cfg->ack_enable && waitForAck(seq, _cfg->ack_window_ms)) {
+            out = TxOutcome::ACKED;
+            break;
+        }
     }
-    return _cfg->ack_enable ? TxOutcome::SENT_NO_ACK : TxOutcome::ACKED;
+    if (_listening) startListen();   /* resume continuous RX after TX/ACK */
+    return out;
+}
+
+/* ---------- Downlink command RX ---------- */
+
+bool LoRaLink::startListen() {
+    _listening = true;
+    s_rxDone = false;
+    _radio->setDio1Action(onAckRxDone);
+    return _radio->startReceive() == RADIOLIB_ERR_NONE;
+}
+
+void LoRaLink::stopListen() {
+    _listening = false;
+    _radio->clearDio1Action();
+    _radio->standby();
+}
+
+bool LoRaLink::receiveCommand(sps_cmd_t *out, uint32_t *seq_out) {
+    if (!_listening || !s_rxDone) return false;
+    s_rxDone = false;
+    uint8_t buf[SPS_MAX_FRAME];
+    bool got = false;
+    int len = _radio->getPacketLength();   /* fresh read right after IRQ */
+    if (len > 0 && (size_t)len <= sizeof(buf) &&
+        _radio->readData(buf, len) == RADIOLIB_ERR_NONE) {
+        sps_header_t h;
+        uint8_t pl[SPS_MAX_PLEN];
+        size_t plen;
+        /* Accept only: our net, CMD type, addressed to us, authenticated
+           under OUR key, and SEQ strictly above the persisted floor. The
+           gateway's downlink SEQ is monotonic (persisted in its DB) and
+           the extra command copies reuse the same SEQ, so strict-greater
+           is both the dedupe and the anti-replay check — and it stays
+           correct across node reboots once the caller persists the floor. */
+        if (sps_frame_open(_cfg->psk, buf, (size_t)len, &h, pl, &plen) == SPS_OK &&
+            h.net_id == _cfg->net_id && h.msg_type == SPS_MSG_CMD &&
+            h.node_id == _cfg->node_id && h.seq > _cmdLastSeq) {
+            _cmdLastSeq = h.seq;
+            sps_cmd_read(pl, out);
+            if (seq_out) *seq_out = h.seq;
+            got = true;
+        }
+    }
+    _radio->startReceive();
+    return got;
 }

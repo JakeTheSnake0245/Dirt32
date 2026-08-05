@@ -82,6 +82,12 @@ class Db:
                 self._conn.commit()
             except sqlite3.OperationalError:
                 pass  # column already present
+        # Migration: per-node downlink SEQ counter for gateway->node commands.
+        try:
+            self._conn.execute("ALTER TABLE nodes ADD COLUMN down_seq INTEGER")
+            self._conn.commit()
+        except sqlite3.OperationalError:
+            pass  # column already present
 
     def _exec(self, sql, args=()):
         with self._lock:
@@ -141,6 +147,22 @@ class Db:
                          rssi=rssi, snr=snr, hb_lat_e7=lat_e7, hb_lon_e7=lon_e7,
                          csi_noise=csi_noise)
         return now
+
+    def next_down_seq(self, node_id: int) -> int:
+        """Atomically increment and return the gateway->node downlink SEQ.
+        Monotonic per node and persisted, so the node's replay window never
+        sees a reused sequence number across daemon restarts."""
+        with self._lock:
+            self._conn.execute(
+                "INSERT OR IGNORE INTO nodes (node_id) VALUES (?)", (node_id,))
+            self._conn.execute(
+                "UPDATE nodes SET down_seq = COALESCE(down_seq, 0) + 1"
+                " WHERE node_id=?", (node_id,))
+            cur = self._conn.execute(
+                "SELECT down_seq FROM nodes WHERE node_id=?", (node_id,))
+            seq = cur.fetchone()[0]
+            self._conn.commit()
+            return int(seq)
 
     def add_raw(self, frame_hex, rssi, snr, verdict):
         self._exec("INSERT INTO raw_frames (received_at, frame_hex, rssi, snr,"

@@ -27,6 +27,25 @@ public:
     /* Single-shot transmit: no retransmit, no ACK window (heartbeat path). */
     bool sendOnce(const uint8_t *frame, size_t len);
 
+    /*
+     * Downlink command RX (awake nodes only — bench/CSI/geophone modes).
+     * startListen() puts the radio in continuous receive; receiveCommand()
+     * is polled from loop() and returns true when an authenticated,
+     * non-replayed SPS_MSG_CMD addressed to this node arrived. TX methods
+     * automatically resume the listen state after transmitting.
+     */
+    bool startListen();
+    void stopListen();
+    bool receiveCommand(sps_cmd_t *out, uint32_t *seq_out);
+    bool listening() const { return _listening; }
+
+    /* Downlink anti-replay: commands are accepted only with SEQ strictly
+     * above this floor (gateway SEQ is monotonic and persisted, so no
+     * windowing needed). Seed from NVS at boot so a captured command can't
+     * be replayed after a node reboot. */
+    void setCmdSeqFloor(uint32_t seq) { if (seq > _cmdLastSeq) _cmdLastSeq = seq; }
+    uint32_t cmdSeqFloor() const { return _cmdLastSeq; }
+
     int16_t lastRssi() const { return _lastRssi; }
     float   lastSnr() const { return _lastSnr; }
 
@@ -35,7 +54,9 @@ private:
 
     SX1262 *_radio = nullptr;
     const NodeConfig *_cfg = nullptr;
+    bool _listening = false;
     sps_replay_t _ackReplay;
+    uint32_t _cmdLastSeq = 0;  /* downlink strict-monotonic floor */
     int16_t _lastRssi = 0;
     float _lastSnr = 0;
 };

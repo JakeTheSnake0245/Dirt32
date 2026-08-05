@@ -22,11 +22,20 @@ KEY_LEN = 32
 MSG_ALERT = 0x01
 MSG_HEARTBEAT = 0x02
 MSG_ACK = 0x03
+MSG_CMD = 0x04          # gateway -> node command (downlink)
 
 ALERT_PLEN = 10
 HEARTBEAT_PLEN = 22
 ACK_PLEN = 4
-PAYLOAD_LEN = {MSG_ALERT: ALERT_PLEN, MSG_HEARTBEAT: HEARTBEAT_PLEN, MSG_ACK: ACK_PLEN}
+CMD_PLEN = 2            # CMD1 ARG1
+PAYLOAD_LEN = {MSG_ALERT: ALERT_PLEN, MSG_HEARTBEAT: HEARTBEAT_PLEN,
+               MSG_ACK: ACK_PLEN, MSG_CMD: CMD_PLEN}
+
+# Command IDs (MSG_CMD payload). Header NODE_ID is the destination; SEQ is
+# the gateway's per-node downlink counter (node keeps its own replay
+# window for it). No command ACK — confirmation is observable behavior
+# (e.g. next heartbeat's HF_CSI_CALIB after a CSI_RECAL).
+CMD_CSI_RECAL = 1       # restart WiFi-radar baseline calibration
 
 EV_NAMES = {0: "unknown", 1: "footstep", 2: "vehicle", 3: "multiple",
             4: "wifi_presence"}
@@ -217,6 +226,19 @@ class Ack:
     @staticmethod
     def unpack(b: bytes) -> "Ack":
         return Ack(int.from_bytes(b[:3], "little"), b[3])
+
+
+@dataclass
+class Cmd:
+    cmd: int
+    arg: int = 0
+
+    def pack(self) -> bytes:
+        return bytes([self.cmd, self.arg])
+
+    @staticmethod
+    def unpack(b: bytes) -> "Cmd":
+        return Cmd(b[0], b[1])
 
 
 def seal(key: bytes, hdr: Header, payload: bytes) -> bytes:

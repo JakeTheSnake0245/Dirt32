@@ -37,6 +37,7 @@ size_t sps_payload_len(uint8_t msg_type) {
         case SPS_MSG_ALERT:     return SPS_ALERT_PLEN;
         case SPS_MSG_HEARTBEAT: return SPS_HEARTBEAT_PLEN;
         case SPS_MSG_ACK:       return SPS_ACK_PLEN;
+        case SPS_MSG_CMD:       return SPS_CMD_PLEN;
         default:                return 0;
     }
 }
@@ -88,6 +89,15 @@ void sps_ack_write(const sps_ack_t *a, uint8_t out[SPS_ACK_PLEN]) {
 void sps_ack_read(const uint8_t in[SPS_ACK_PLEN], sps_ack_t *a) {
     a->ack_seq = get24(in);
     a->status  = in[3];
+}
+
+void sps_cmd_write(const sps_cmd_t *c, uint8_t out[SPS_CMD_PLEN]) {
+    out[0] = c->cmd;
+    out[1] = c->arg;
+}
+void sps_cmd_read(const uint8_t in[SPS_CMD_PLEN], sps_cmd_t *c) {
+    c->cmd = in[0];
+    c->arg = in[1];
 }
 
 /* ---------- Nonce ---------- */
@@ -165,6 +175,15 @@ int sps_seal_ack(const uint8_t key[SPS_KEY_LEN], uint8_t net_id,
     uint8_t pl[SPS_ACK_PLEN];
     sps_header_t h = { net_id, SPS_MSG_ACK, dest_node_id, seq };
     sps_ack_write(a, pl);
+    return sps_frame_seal(key, &h, pl, sizeof(pl), out, out_cap);
+}
+
+int sps_seal_cmd(const uint8_t key[SPS_KEY_LEN], uint8_t net_id,
+                 uint16_t dest_node_id, uint32_t seq, const sps_cmd_t *c,
+                 uint8_t *out, size_t out_cap) {
+    uint8_t pl[SPS_CMD_PLEN];
+    sps_header_t h = { net_id, SPS_MSG_CMD, dest_node_id, seq };
+    sps_cmd_write(c, pl);
     return sps_frame_seal(key, &h, pl, sizeof(pl), out, out_cap);
 }
 

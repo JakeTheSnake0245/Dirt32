@@ -59,6 +59,20 @@ class CrossVector(unittest.TestCase):
         ack = proto.Ack.unpack(pt)
         self.assertEqual((ack.ack_seq, ack.status), (0x000A0B, proto.ACK_OK))
 
+    def test_cmd_from_c(self):
+        """Gateway->node command (downlink, msg type 0x04), C-sealed."""
+        hdr, pt = proto.open_frame(KEY, VECTORS["cmd_recal"])
+        cmd = proto.Cmd.unpack(pt)
+        self.assertEqual((hdr.net_id, hdr.node_id, hdr.seq, hdr.msg_type),
+                         (7, 0x0102, 0x000101, proto.MSG_CMD))
+        self.assertEqual((cmd.cmd, cmd.arg), (proto.CMD_CSI_RECAL, 0))
+
+    def test_cmd_python_seal_matches_c(self):
+        """Python-sealed CMD must be byte-identical to the C library's."""
+        hdr = proto.Header(7, proto.MSG_CMD, 0x0102, 0x000101)
+        frame = proto.seal(KEY, hdr, proto.Cmd(proto.CMD_CSI_RECAL, 0).pack())
+        self.assertEqual(frame, VECTORS["cmd_recal"])
+
     def test_python_seal_reopens(self):
         """Python-sealed frame opens in Python (and, by the vectors above,
         matches the C AEAD — same construction both directions)."""

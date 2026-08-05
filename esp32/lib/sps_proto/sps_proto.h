@@ -44,10 +44,19 @@ extern "C" {
 #define SPS_MSG_ALERT        0x01u
 #define SPS_MSG_HEARTBEAT    0x02u
 #define SPS_MSG_ACK          0x03u
+#define SPS_MSG_CMD          0x04u  /* gateway -> node command (downlink) */
 
 #define SPS_ALERT_PLEN       10u  /* TIMESTAMP4 CLASS1 CONF1 PEAK2 BATT2 */
 #define SPS_HEARTBEAT_PLEN   22u  /* TS4 BATT2 LAT4 LON4 FLAGS1 NOISE2 FW1 RST2 CSI2 */
 #define SPS_ACK_PLEN         4u   /* ACK_SEQ3 STATUS1 */
+#define SPS_CMD_PLEN         2u   /* CMD1 ARG1 */
+
+/* Command IDs (SPS_MSG_CMD payload). Header NODE_ID is the destination;
+ * SEQ is the gateway's per-node downlink counter (own replay window on
+ * the node, separate from the ACK window). No command ACK: confirmation
+ * is observable node behavior (e.g. the next heartbeat's CSI_CALIB flag
+ * after a CSI_RECAL). */
+#define SPS_CMD_CSI_RECAL    1u   /* restart WiFi-radar baseline calibration */
 
 #define SPS_MAX_PLEN         SPS_HEARTBEAT_PLEN
 #define SPS_MAX_FRAME        (SPS_HDR_LEN + SPS_MAX_PLEN + SPS_TAG_LEN)
@@ -127,6 +136,11 @@ typedef struct {
     uint8_t  status;
 } sps_ack_t;
 
+typedef struct {
+    uint8_t cmd;           /* SPS_CMD_* */
+    uint8_t arg;           /* command-specific, 0 if unused */
+} sps_cmd_t;
+
 /* ---------- Header ---------- */
 
 void sps_header_write(const sps_header_t *h, uint8_t out[SPS_HDR_LEN]);
@@ -144,6 +158,8 @@ void sps_heartbeat_write(const sps_heartbeat_t *hb, uint8_t out[SPS_HEARTBEAT_PL
 void sps_heartbeat_read(const uint8_t in[SPS_HEARTBEAT_PLEN], sps_heartbeat_t *hb);
 void sps_ack_write(const sps_ack_t *a, uint8_t out[SPS_ACK_PLEN]);
 void sps_ack_read(const uint8_t in[SPS_ACK_PLEN], sps_ack_t *a);
+void sps_cmd_write(const sps_cmd_t *c, uint8_t out[SPS_CMD_PLEN]);
+void sps_cmd_read(const uint8_t in[SPS_CMD_PLEN], sps_cmd_t *c);
 
 /* ---------- Frame seal / open (AEAD) ---------- */
 
@@ -178,6 +194,9 @@ int sps_seal_heartbeat(const uint8_t key[SPS_KEY_LEN], uint8_t net_id,
                        uint8_t *out, size_t out_cap);
 int sps_seal_ack(const uint8_t key[SPS_KEY_LEN], uint8_t net_id,
                  uint16_t dest_node_id, uint32_t seq, const sps_ack_t *a,
+                 uint8_t *out, size_t out_cap);
+int sps_seal_cmd(const uint8_t key[SPS_KEY_LEN], uint8_t net_id,
+                 uint16_t dest_node_id, uint32_t seq, const sps_cmd_t *c,
                  uint8_t *out, size_t out_cap);
 
 /* ---------- Replay protection (gateway / ACK-consumer side) ---------- */

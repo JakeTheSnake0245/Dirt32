@@ -58,8 +58,8 @@ class Ingest:
         if hdr.net_id != self.net_id:
             self.db.add_raw(hexf, rssi, snr, "wrong-net")
             return
-        if hdr.msg_type == proto.MSG_ACK:
-            return   # our own ACK echoed back by the bridge
+        if hdr.msg_type in (proto.MSG_ACK, proto.MSG_CMD):
+            return   # our own ACK/CMD echoed back by the bridge
 
         # ---- 2. Key lookup ----------------------------------------------
         key = self.keys.get(hdr.node_id)
@@ -176,6 +176,39 @@ class Ingest:
         self.publish_status(hdr.node_id)
 
     # ------------------------------------------------------------------
+
+    def send_cmd(self, node_id: int, cmd: int, arg: int = 0,
+                 copies: int = 3, spacing_s: float = 0.35) -> bool:
+        """Seal and transmit a gateway->node command over the bridge.
+
+        No command ACK exists: we send `copies` identical frames (same SEQ —
+        the node's downlink replay window makes the extras no-ops) and the
+        caller observes confirmation via node behavior (e.g. the next
+        heartbeat's HF_CSI_CALIB flag after a CSI_RECAL). Returns False if
+        the node is unknown or there is no radio link."""
+        key = self.keys.get(node_id)
+        if key is None:
+            self.log(f"[cmd] no key for node {node_id} — not sent")
+            return False
+        if self.ack_sender is None:
+            self.log("[cmd] no radio link (simulator?) — not sent")
+            return False
+        seq = self.db.next_down_seq(node_id)
+        hdr = proto.Header(self.net_id, proto.MSG_CMD, node_id, seq)
+        frame = proto.seal(key, hdr, proto.Cmd(cmd, arg).pack())
+        try:
+            for i in range(max(1, copies)):
+                if i:
+                    time.sleep(spacing_s)
+                self.ack_sender(frame)
+        except Exception as e:              # noqa: BLE001
+            self.log(f"[cmd] send failed node={node_id}: {e}")
+            return False
+        self.log(f"[cmd] sent cmd={cmd} arg={arg} node={node_id} "
+                 f"seq={seq} x{copies}")
+        self.on_event("cmd", {"node_id": node_id, "cmd": cmd, "arg": arg,
+                              "at": time.time()})
+        return True
 
     def publish_status(self, node_id: int):
         node = self.db.get_node(node_id)
