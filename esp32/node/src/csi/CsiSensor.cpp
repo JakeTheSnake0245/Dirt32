@@ -50,7 +50,11 @@ static void IRAM_ATTR csi_rx_cb(void *ctx, wifi_csi_info_t *info) {
      * payload; beacons run 150-300+. 100 keeps the input homogeneous while
      * not starving on real ping sizes (the earlier 64 gate was too tight
      * and rejected peer pings — ~0.5 fps instead of ~10). */
-    if (info->rx_ctrl.sig_len > 100) { s_instance->countBig(); return; }
+    if (info->rx_ctrl.sig_len > 100) {
+        s_instance->countBig(info->rx_ctrl.sig_len);
+        return;
+    }
+    s_instance->noteAccept(info->rx_ctrl.sig_len);
 
     /* info->buf is interleaved int8 imag/real pairs. Use the middle
      * subcarriers (skip guard/DC region at both ends). */

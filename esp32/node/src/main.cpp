@@ -421,6 +421,9 @@ static void handleCli(String line) {
                       (unsigned long)csi.frameCount(),
                       (unsigned long)csi.rejHtCount(),
                       (unsigned long)csi.rejBigCount());
+        Serial.printf("[csi] sizes: lastAccept=%uB rejBig min=%uB last=%uB "
+                      "(gate: accept <=100B)\n",
+                      csi.lastAcceptLen(), csi.minBigLen(), csi.lastBigLen());
         uint32_t secs = rest.isEmpty() ? 0 : (uint32_t)rest.toInt();
         if (secs > 0) {
             Serial.printf("[csi] streaming metric for %lus (trigger at %.1f)\n",

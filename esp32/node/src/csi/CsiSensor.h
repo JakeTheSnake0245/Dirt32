@@ -57,7 +57,15 @@ public:
     uint32_t rejBigCount() const { return _rejBig; }  /* sig_len > ping gate */
     void countCb()   { _cbTotal = _cbTotal + 1; }
     void countHt()   { _rejHT = _rejHT + 1; }
-    void countBig()  { _rejBig = _rejBig + 1; }
+    void countBig(uint16_t len) {
+        _rejBig = _rejBig + 1;
+        _lastBigLen = len;
+        if (_minBigLen == 0 || len < _minBigLen) _minBigLen = len;
+    }
+    void noteAccept(uint16_t len) { _lastAcceptLen = len; }
+    uint16_t lastBigLen() const    { return _lastBigLen; }
+    uint16_t minBigLen() const     { return _minBigLen; }
+    uint16_t lastAcceptLen() const { return _lastAcceptLen; }
 
     /* Suspend/resume ping TX around LoRa activity (coexistence: keeps the
        radio quiet while an alert burst + ACK window is in flight). */
@@ -109,6 +117,9 @@ private:
     volatile uint32_t _cbTotal = 0;
     volatile uint32_t _rejHT = 0;
     volatile uint32_t _rejBig = 0;
+    volatile uint16_t _lastBigLen = 0;
+    volatile uint16_t _minBigLen = 0;
+    volatile uint16_t _lastAcceptLen = 0;
 
     /* ring of per-frame spatial turbulence values (written from WiFi task,
        read from loop; single-writer single-reader, index race is benign) */
