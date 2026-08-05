@@ -73,7 +73,6 @@ bool Adxl355FrontEnd::begin(uint16_t sample_rate_hz) {
                       "PARTID=0x%02X (want 0xED)\n", devid, partid);
         return false;
     }
-    Serial.println("[adxl355] ID OK (0xAD/0xED)");
 
     /* Soft-reset the chip (reg 0x2F <- 0x52) and wait for its internal
      * NVM/fuse reload (STATUS bit4 NVM_BUSY) to finish before configuring.
@@ -91,14 +90,12 @@ bool Adxl355FrontEnd::begin(uint16_t sample_rate_hz) {
     uint32_t t0 = millis();
     uint8_t st;
     while (((st = reg(REG_STATUS)) & 0x10) && millis() - t0 < 200) delay(2);
-    Serial.printf("[adxl355] alive after RESET; STATUS=0x%02X (NVM_BUSY %s, %lums)\n",
-                  st, (st & 0x10) ? "STUCK" : "clear",
-                  (unsigned long)(millis() - t0));
+    if (st & 0x10) Serial.println("[adxl355] WARNING: NVM_BUSY stuck after reset");
 
-    /* Bisect instrumentation: the chip has been observed answering the ID
-     * reads above and then going permanently silent (0x00) moments later.
-     * Re-verify the ID after EVERY config transaction to catch the exact
-     * one that kills it. */
+    /* Verify liveness after each config step; quiet on success, full
+     * postmortem (MISO pull-test, blind-revive, toggle recovery) on death.
+     * Kept permanently: a MISO clamp from an external short is invisible
+     * otherwise (lesson: PMDZ pin 3/9 breadboard bridge, Aug 2026). */
     auto still = [this](const char *after) {
         uint8_t d = reg(REG_DEVID_AD);
         if (d != 0xAD) {
@@ -107,35 +104,19 @@ bool Adxl355FrontEnd::begin(uint16_t sample_rate_hz) {
             postMortem();
             return false;
         }
-        Serial.printf("[adxl355] alive after %s\n", after);
         return true;
     };
-
-    /* Dump the NVM shadow registers (0x50-0x5E): a genuine ADXL355 holds
-     * ~15 nonzero factory-calibration bytes there after reset. All zeros
-     * strongly suggests counterfeit/blank silicon — which answers ID reads
-     * but dies when the (uncalibrated) analog engine is powered on. */
-    {
-        uint8_t sh[15];
-        burstRead(0x50, sh, sizeof(sh));
-        int nz = 0;
-        Serial.print("[adxl355] NVM shadow 0x50-0x5E:");
-        for (size_t i = 0; i < sizeof(sh); i++) {
-            Serial.printf(" %02X", sh[i]);
-            if (sh[i]) nz++;
-        }
-        Serial.printf("  (%d nonzero%s)\n", nz,
-                      nz == 0 ? " <- BLANK NVM: counterfeit/reject part?" : "");
-    }
 
     regWrite(REG_POWER_CTL, 0x01);          /* standby for config */
     if (!still("POWER_CTL=standby")) return false;
     regWrite(REG_RANGE, 0x01);              /* ±2 g — max sensitivity */
     if (!still("RANGE=2g")) return false;
-    {   /* readback-verify the config writes: proves MOSI/write path integrity */
+    {   /* readback-verify: proves MOSI/write path integrity */
         uint8_t rr = reg(REG_RANGE);
-        Serial.printf("[adxl355] RANGE readback: 0x%02X (want 0x01) %s\n",
-                      rr, rr == 0x01 ? "OK" : "<- WRITE PATH BROKEN");
+        if (rr != 0x01) {
+            Serial.printf("[adxl355] RANGE readback 0x%02X (want 0x01) <- WRITE PATH BROKEN\n", rr);
+            return false;
+        }
     }
 
     /* ODR: 0=4kHz .. 5=125Hz, 4=250Hz, 3=500Hz. Pick nearest >= requested. */
@@ -192,6 +173,7 @@ bool Adxl355FrontEnd::begin(uint16_t sample_rate_hz) {
     }
     delay(200);
     if (!still("measure +200ms")) return false;
+    Serial.println("[adxl355] init OK: ID 0xAD/0xED, ±2g, measuring");
     return true;
 }
 

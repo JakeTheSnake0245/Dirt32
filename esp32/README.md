@@ -341,6 +341,14 @@ header, in PMDZ pin order:
 
 Seven wires total (PMDZ pins 1, 2, 3, 4, 5, 6, 8).
 
+> ⚠️ **Breadboard trap (cost us days):** the 2×6 Pmod header shorts its
+> vertical pin pairs (1/7, 2/8, **3/9**, 4/10, 5/11, 6/12) if both rows are
+> seated in the same breadboard row group. A 3↔9 bridge (MISO↔INT2) is
+> invisible in standby but clamps MISO low the instant measurement mode
+> starts — every register read returns 0x00 and the chip looks dead, yet a
+> blind standby write "revives" it. Span the breadboard's center channel or
+> use jumper wires only.
+
 > ⚠️ **Verify against the silk before soldering.** The PMDZ prints tiny
 > labels (CS, MOSI, MISO, SCLK, DRDY, INT1, VDD, GND) near the header —
 > match by those labels, not the pin numbers above, in case your board
