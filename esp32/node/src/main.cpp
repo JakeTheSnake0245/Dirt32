@@ -424,6 +424,14 @@ static void handleCli(String line) {
         Serial.printf("[csi] sizes: lastAccept=%uB rejBig min=%uB last=%uB "
                       "(gate: accept <=135B)\n",
                       csi.lastAcceptLen(), csi.minBigLen(), csi.lastBigLen());
+        Serial.printf("[csi] hist: <=135B=%lu 136-180B=%lu 181-250B=%lu "
+                      ">250B=%lu | tx pings=%lu fails=%lu\n",
+                      (unsigned long)csi.sizeHist(0),
+                      (unsigned long)csi.sizeHist(1),
+                      (unsigned long)csi.sizeHist(2),
+                      (unsigned long)csi.sizeHist(3),
+                      (unsigned long)csi.txPings(),
+                      (unsigned long)csi.txFails());
         uint32_t secs = rest.isEmpty() ? 0 : (uint32_t)rest.toInt();
         if (secs > 0) {
             Serial.printf("[csi] streaming metric for %lus (trigger at %.1f)\n",

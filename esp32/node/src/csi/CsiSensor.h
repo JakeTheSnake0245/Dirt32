@@ -66,6 +66,14 @@ public:
     uint16_t lastBigLen() const    { return _lastBigLen; }
     uint16_t minBigLen() const     { return _minBigLen; }
     uint16_t lastAcceptLen() const { return _lastAcceptLen; }
+    /* Size histogram over ALL callbacks + TX-side ping accounting. */
+    void countSize(uint16_t len) {
+        int i = (len <= 135) ? 0 : (len <= 180) ? 1 : (len <= 250) ? 2 : 3;
+        _szHist[i] = _szHist[i] + 1;
+    }
+    uint32_t sizeHist(int i) const { return _szHist[i & 3]; }
+    uint32_t txPings() const { return _txPings; }
+    uint32_t txFails() const { return _txFails; }
 
     /* Suspend/resume ping TX around LoRa activity (coexistence: keeps the
        radio quiet while an alert burst + ACK window is in flight). */
@@ -120,6 +128,9 @@ private:
     volatile uint16_t _lastBigLen = 0;
     volatile uint16_t _minBigLen = 0;
     volatile uint16_t _lastAcceptLen = 0;
+    volatile uint32_t _szHist[4] = {0, 0, 0, 0};
+    volatile uint32_t _txPings = 0;
+    volatile uint32_t _txFails = 0;
 
     /* ring of per-frame spatial turbulence values (written from WiFi task,
        read from loop; single-writer single-reader, index race is benign) */

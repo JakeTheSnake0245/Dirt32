@@ -37,6 +37,7 @@ static void IRAM_ATTR csi_rx_cb(void *ctx, wifi_csi_info_t *info) {
     (void)ctx;
     if (!s_instance || !info || !info->buf || info->len < 8) return;
     s_instance->countCb();
+    s_instance->countSize(info->rx_ctrl.sig_len);
 
     /* Homogeneous input domain: the detector's moving variance assumes one
      * stationary signal. Mixing legacy ESP-NOW pings with ambient HT
@@ -165,7 +166,9 @@ void CsiSensor::service() {
     uint8_t buf[8] = {'D', '3', '2', 'c'};
     memcpy(buf + 4, &n, 4);
     n++;
-    esp_now_send(BCAST, buf, sizeof(buf));
+    _txPings = _txPings + 1;
+    if (esp_now_send(BCAST, buf, sizeof(buf)) != ESP_OK)
+        _txFails = _txFails + 1;
 }
 
 uint16_t CsiSensor::noiseX100() const {
