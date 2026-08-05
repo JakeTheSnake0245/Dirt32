@@ -31,7 +31,7 @@ struct NodeConfig {
     float    hpf_hz          = 2.0f;   /* 1-8 */
     uint16_t sta_ms          = 200;
     uint16_t lta_ms          = 5000;
-    float    trigger_ratio   = 4.0f;
+    float    trigger_ratio   = 2.0f;   /* halved from 4.0 — 2x default sensitivity */
     float    footstep_lo_hz  = 20.0f, footstep_hi_hz = 80.0f;
     float    vehicle_lo_hz   = 2.0f,  vehicle_hi_hz  = 20.0f;
 
@@ -45,7 +45,12 @@ struct NodeConfig {
     /* Front-end */
     FrontEndType front_end   = FE_ADXL355;
     bool     motion_wake_enable = true;
-    float    motion_threshold_g = 0.005f;
+    float    motion_threshold_g = 0.0025f; /* halved from 0.005 — 2x wake sensitivity */
+
+    /* Deployment: on cold boot, auto-arm (deep-sleep cycle) after this many
+       seconds of an untouched bench CLI. Any CLI keystroke cancels it for
+       the session. 0 = never auto-arm (bench-forever behavior). */
+    uint16_t auto_arm_s      = 120;
 
     /* GPS */
     bool     gps_enable      = true;

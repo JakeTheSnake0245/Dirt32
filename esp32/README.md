@@ -157,10 +157,11 @@ matching Heltec's official V4 GPS example: UART RX = GPIO39, TX = GPIO38
 | `hpf_hz`            | 1    | 8     | **2.0**               | Kills wind/thermal drift without touching the 2–20 Hz vehicle band |
 | `sta_ms`            | 50   | 1000  | **200**               | Short enough to catch a single footstep impulse |
 | `lta_ms`            | 1000 | 30000 | **5000**              | Stable background estimate; longer adapts too slowly at dawn/dusk noise shifts |
-| `trigger_ratio`     | 2    | 10    | **4.0**               | Start here, then tune with `detector 30` on-site (spec §13): lower → sensitive, higher → fewer false alarms |
+| `trigger_ratio`     | 1.5  | 10    | **2.0**               | High-sensitivity default; tune with `detector 30` on-site (spec §13): lower → sensitive, higher → fewer false alarms |
 | `footstep_lo`/`hi`  | —    | —     | **20 / 80** Hz        | Per spec §5.2 band split |
 | `vehicle_lo`/`hi`   | —    | —     | **2 / 20** Hz         | Per spec §5.2 band split |
-| `motion_threshold`  | 0.002| 0.1   | **0.005** g           | ADXL wake threshold; raise if wind/livestock cause spurious wakes |
+| `motion_threshold`  | 0.001| 0.1   | **0.0025** g          | ADXL wake threshold (high-sensitivity default); raise if wind/livestock cause spurious wakes |
+| `auto_arm_s`        | 0    | 3600  | **120**               | Cold boot auto-arms after this many untouched-CLI seconds; any keystroke/PRG cancels; 0 = never auto-arm |
 
 ### Reliability parameters (alerts)
 
@@ -390,6 +391,12 @@ usual damping resistor across the coil per the SM-24 datasheet, ~1 kΩ).
    people walking nearby behave the way you want.
 4. `taptest` — full chain: detection event → encrypted ALERT over the air.
 - **Battery divider:** calibrate `readBatteryMv()` against a meter.
+- **Auto-arm (deploy-and-forget):** on a cold boot with healthy sensor and
+  radio, the node auto-enters the armed motion-wake sleep cycle after
+  `auto_arm_s` seconds (default 120) of an untouched bench CLI. Any
+  keystroke or PRG press cancels it for the session; `set auto_arm_s 0`
+  disables it entirely. So in the field: power it up, walk away, and two
+  minutes later it's a trip sensor.
 
 ## Security model (spec §4.2, §10)
 

@@ -722,6 +722,14 @@ void setup() {
     dbgScreen.begin(PIN_BUTTON);
     Serial.println("Bench mode — CLI active. `help` for commands.");
     Serial.println("Press PRG button (or `screen`) for the link-debug display.");
+    if (cfg.auto_arm_s > 0 && cfg.front_end == FE_ADXL355) {
+        if (sensorOk && radioOk)
+            Serial.printf("AUTO-ARM: entering armed sleep cycle in %us — any keystroke cancels (set auto_arm_s 0 to disable).\n",
+                          (unsigned)cfg.auto_arm_s);
+        else
+            Serial.printf("AUTO-ARM: skipped — %s failed init; staying in bench mode.\n",
+                          sensorOk ? "radio" : "sensor");
+    }
     if (cfg.front_end == FE_GEOPHONE)
         Serial.println("Geophone profile: continuous detection running.");
 }
@@ -749,12 +757,37 @@ void loop() {
     }
 
     static String lineBuf;
+    static bool autoArmCancelled = false;
     while (Serial.available()) {
         char c = (char)Serial.read();
+        if (!autoArmCancelled && cfg.auto_arm_s > 0) {
+            autoArmCancelled = true;
+            Serial.println("[auto-arm] cancelled — bench mode until `sleep` or reboot.");
+        }
         if (c == '\n' || c == '\r') {
             handleCli(lineBuf);
             lineBuf = "";
         } else lineBuf += c;
+    }
+
+    /* Deploy-and-forget: on a cold boot with healthy sensor+radio and an
+     * untouched CLI, arm automatically after cfg.auto_arm_s seconds. Any
+     * keystroke or button press cancels for this session. */
+    if (!autoArmCancelled && cfg.auto_arm_s > 0 && sensorOk && radioOk &&
+        cfg.front_end == FE_ADXL355) {
+        static uint32_t lastCountdown = 0;
+        uint32_t deadline = (uint32_t)cfg.auto_arm_s * 1000UL;
+        uint32_t left = (millis() < deadline) ? deadline - millis() : 0;
+        if (left == 0) {
+            Serial.println("[auto-arm] arming now — motion-wake sleep cycle.");
+            dbgScreen.showMessage("AUTO-ARM", "sleeping...", nullptr);
+            delay(500);
+            goToSleep();
+        } else if (left <= 30000 && millis() - lastCountdown >= 10000) {
+            lastCountdown = millis();
+            Serial.printf("[auto-arm] arming in %lus — any keystroke cancels.\n",
+                          (unsigned long)(left / 1000));
+        }
     }
 
     /* PRG button — three tiers:
@@ -763,6 +796,7 @@ void loop() {
      *   SLEEP (8 s held)  → deep sleep (soft power-down) */
     switch (dbgScreen.poll()) {
         case BtnEvent::TAP: {
+            autoArmCancelled = true;   /* user is interacting — hold bench */
             Serial.println("[deploy] TAP — sending deploy heartbeat...");
             dbgScreen.showMessage("DEPLOYING...", "GPS fix...", nullptr);
             sendHeartbeat(/*deployFlag=*/true);
@@ -771,6 +805,7 @@ void loop() {
             break;
         }
         case BtnEvent::HOLD:
+            autoArmCancelled = true;   /* user is interacting — hold bench */
             dbgScreen.showConfig(cfg, radioOk, rtc_seq);
             break;
         case BtnEvent::SLEEP:

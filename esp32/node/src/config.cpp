@@ -60,6 +60,7 @@ void configLoad(NodeConfig &cfg) {
     cfg.front_end = (FrontEndType)(int)(doc["front_end"] | (int)cfg.front_end);
     cfg.motion_wake_enable = doc["motion_wake_enable"] | cfg.motion_wake_enable;
     cfg.motion_threshold_g = doc["motion_threshold"] | cfg.motion_threshold_g;
+    cfg.auto_arm_s = doc["auto_arm_s"] | cfg.auto_arm_s;
     cfg.gps_enable = doc["gps_enable"] | cfg.gps_enable;
     cfg.solar_sense_gpio = doc["solar_sense_gpio"] | cfg.solar_sense_gpio;
     cfg.gps_fix_timeout_s = doc["gps_fix_timeout_s"] | cfg.gps_fix_timeout_s;
@@ -105,6 +106,7 @@ static void toJson(const NodeConfig &cfg, JsonDocument &doc, bool includePsk) {
     doc["front_end"] = (int)cfg.front_end;
     doc["motion_wake_enable"] = cfg.motion_wake_enable;
     doc["motion_threshold"] = cfg.motion_threshold_g;
+    doc["auto_arm_s"] = cfg.auto_arm_s;
     doc["gps_enable"] = cfg.gps_enable;
     doc["solar_sense_gpio"] = cfg.solar_sense_gpio;
     doc["gps_fix_timeout_s"] = cfg.gps_fix_timeout_s;
@@ -162,6 +164,7 @@ bool configSet(NodeConfig &cfg, const String &key, const String &value) {
     }
     if (key == "motion_wake_enable") { cfg.motion_wake_enable = value.toInt() != 0; return true; }
     if (key == "motion_threshold") { cfg.motion_threshold_g = value.toFloat(); return true; }
+    if (key == "auto_arm_s") { int v = value.toInt(); if (v < 0 || v > 3600) return false; cfg.auto_arm_s = v; return true; }
     if (key == "gps_enable") { cfg.gps_enable = value.toInt() != 0; return true; }
     if (key == "solar_sense_gpio") {
         int v = value.toInt();
