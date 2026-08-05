@@ -44,7 +44,10 @@ systemctl enable --now mosquitto
 echo "== service =="
 cp "$HERE/systemd/dirt32-gateway.service" /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable --now dirt32-gateway
+systemctl enable dirt32-gateway
+# 'enable --now' does NOT restart an already-running service, which left the
+# old code running after upgrades — always restart so new code takes effect.
+systemctl restart dirt32-gateway
 
 echo
 echo "Done. Web GUI: http://$(hostname -I | awk '{print $1}'):9000"

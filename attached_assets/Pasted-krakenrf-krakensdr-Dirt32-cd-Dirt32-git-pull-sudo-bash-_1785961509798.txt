@@ -1,0 +1,34 @@
+krakenrf@krakensdr:~/Dirt32 $ cd ~/Dirt32 && git pull && sudo bash linux/install.sh
+Already up to date.
+== packages (python3 is stdlib-only; mosquitto is the MQTT broker) ==
+== user + directories ==
+== config ==
+== mosquitto (localhost-only by default — see README to open to the LAN) ==
+Synchronizing state of mosquitto.service with SysV service script with /lib/systemd/systemd-sysv-install.
+Executing: /lib/systemd/systemd-sysv-install enable mosquitto
+== service ==
+
+Done. Web GUI: http://192.168.8.115:9000
+MQTT:          mosquitto_sub -t 'dirt32/#' -v
+Logs:          journalctl -u dirt32-gateway -f
+krakenrf@krakensdr:~/Dirt32 $ systemctl status dirt32-gateway   # check the start time is "just now"
+● dirt32-gateway.service - Dirt32 perimeter gateway (ingest + MQTT + web GUI)
+     Loaded: loaded (/etc/systemd/system/dirt32-gateway.service; enabled; preset: enabled)
+     Active: active (running) since Wed 2026-08-05 20:21:37 BST; 1h 3min ago
+   Main PID: 851906 (python3)
+      Tasks: 3 (limit: 9573)
+        CPU: 2.842s
+     CGroup: /system.slice/dirt32-gateway.service
+             └─851906 /usr/bin/python3 -m dirt32_gateway.main /etc/dirt32/gateway.json
+
+Aug 05 21:14:07 krakensdr python3[851906]: [alert] node=1 multiple (seismic) conf=64 rssi=-92
+Aug 05 21:14:42 krakensdr python3[851906]: [alert] node=1 multiple (seismic) conf=67 rssi=-91
+Aug 05 21:14:57 krakensdr python3[851906]: [alert] node=1 multiple (seismic) conf=67 rssi=-91
+Aug 05 21:15:06 krakensdr python3[851906]: [alert] node=1 multiple (seismic) conf=64 rssi=-91
+Aug 05 21:15:45 krakensdr python3[851906]: [cmd] sent cmd=1 arg=0 node=1 seq=10 x3
+Aug 05 21:16:11 krakensdr python3[851906]: [alert] node=1 multiple (seismic) conf=64 rssi=-90
+Aug 05 21:19:01 krakensdr python3[851906]: [alert] node=2 wifi_presence (rf) conf=65 rssi=-74
+Aug 05 21:20:11 krakensdr python3[851906]: [alert] node=2 wifi_presence (rf) conf=64 rssi=-75
+Aug 05 21:24:39 krakensdr python3[851906]: [alert] node=2 wifi_presence (rf) conf=66 rssi=-75
+Aug 05 21:24:39 krakensdr python3[851906]: [mqtt] connected to 127.0.0.1:1883
+krakenrf@krakensdr:~/Dirt32 $ 
