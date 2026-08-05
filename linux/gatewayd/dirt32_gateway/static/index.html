@@ -197,6 +197,8 @@ function pushFeed(e) {
     msg = `⚠ node #${d.node_id} ${d.event?.toUpperCase()} conf=${d.confidence}`;
   else if (e.kind === "heartbeat")
     msg = `node #${d.node_id} heartbeat · ${d.battery_mv} mV`;
+  else if (e.kind === "cmd")
+    msg = `<span class="csi">ᯤ node #${d.node_id} recalibrate sent</span>`;
   else
     msg = `node #${d.node_id} → ${d.color}` +
           (d.reasons?.length ? ` (${d.reasons[0]})` : "");
