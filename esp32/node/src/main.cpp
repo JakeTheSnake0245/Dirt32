@@ -120,8 +120,10 @@ static void sensorRailCycle(uint32_t off_ms) {
 
 static void vePower(bool on) {
     pinMode(PIN_VE, OUTPUT);
-    /* Vext (GPIO36) is ACTIVE-LOW on the Heltec V4 (confirmed against
-       Meshtastic's V4 board support). Define VE_ACTIVE_HIGH to flip. */
+    /* Heltec V4.3.1 datasheet: VextCtrl (GPIO36) must be pulled HIGH to
+       enable Ve — ACTIVE HIGH (VE_ACTIVE_HIGH set in platformio.ini).
+       The old active-low assumption came from V3-era Meshtastic lore and
+       left the sensor running on SPI-diode backfeed. */
 #ifdef VE_ACTIVE_HIGH
     digitalWrite(PIN_VE, on ? HIGH : LOW);
 #else
