@@ -100,6 +100,8 @@ def main():
                   host=cfg["web"]["host"], port=int(cfg["web"]["port"]),
                   cmd_sender=lambda nid: ingest.send_cmd(
                       nid, proto.CMD_CSI_RECAL),
+                  set_sender=lambda nid, pid, raw: ingest.send_cmd(
+                      nid, proto.CMD_SET, pid, raw),
                   api_token=cfg["web"].get("api_token"))
     print(f"[web] GUI on http://{cfg['web']['host']}:{cfg['web']['port']}")
 

@@ -39,7 +39,7 @@ class EventFeed:
 
 
 def make_handler(db: Db, feed: EventFeed, status_cfg: dict, cmd_sender=None,
-                 api_token=None):
+                 api_token=None, set_sender=None):
     class Handler(BaseHTTPRequestHandler):
         server_version = "dirt32-gateway"
 
@@ -98,6 +98,36 @@ def make_handler(db: Db, feed: EventFeed, status_cfg: dict, cmd_sender=None,
                     return
                 node_id = int(parts[-2])
                 ok = bool(cmd_sender(node_id))
+                self._json({"ok": ok} if ok else
+                           {"ok": False, "error": "send failed"},
+                           200 if ok else 502)
+            elif (len(parts) >= 4 and parts[-3] == "nodes"
+                    and parts[-1] == "set" and parts[-2].isdigit()):
+                # POST /gw/nodes/<id>/set  body: {"param": name, "value": num}
+                # Pushes a config change to the node over LoRa; the node
+                # validates, saves to NVS, and heartbeats as confirmation.
+                if set_sender is None:
+                    self._json({"ok": False, "error": "no radio link"}, 503)
+                    return
+                try:
+                    n = int(self.headers.get("Content-Length", 0))
+                    body = json.loads(self.rfile.read(n) or b"{}")
+                    name = str(body["param"])
+                    value = float(body["value"])
+                except Exception:
+                    self._json({"ok": False, "error": "bad request body"}, 400)
+                    return
+                spec = proto.SET_PARAMS.get(name)
+                if spec is None:
+                    self._json({"ok": False, "error": "unknown param"}, 400)
+                    return
+                pid, scale, _label, lo, hi = spec
+                if not (lo <= value <= hi):
+                    self._json({"ok": False,
+                                "error": f"value out of range {lo}..{hi}"}, 400)
+                    return
+                raw = round(value * scale)
+                ok = bool(set_sender(int(parts[-2]), pid, raw))
                 self._json({"ok": ok} if ok else
                            {"ok": False, "error": "send failed"},
                            200 if ok else 502)
@@ -171,10 +201,10 @@ def make_handler(db: Db, feed: EventFeed, status_cfg: dict, cmd_sender=None,
 
 
 def serve(db: Db, feed: EventFeed, status_cfg: dict, host="0.0.0.0", port=9000,
-          cmd_sender=None, api_token=None):
+          cmd_sender=None, api_token=None, set_sender=None):
     httpd = ThreadingHTTPServer((host, port),
                                 make_handler(db, feed, status_cfg, cmd_sender,
-                                             api_token))
+                                             api_token, set_sender))
     t = threading.Thread(target=httpd.serve_forever, daemon=True, name="web")
     t.start()
     return httpd

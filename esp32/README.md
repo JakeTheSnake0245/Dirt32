@@ -453,6 +453,23 @@ another machine on the LAN, set `"api_token": "<random string>"` in the
 `web` section of `/etc/dirt32/gateway.json` — the GUI will prompt for it
 once and remember it.
 
+**Remote settings.** The ⚙ button on each node row opens a settings
+panel: WiFi-radar sensitivity threshold / hold-off / calibration time /
+ping rate (radar rows only), seismic trigger ratio, accelerometer wake
+threshold, and heartbeats per day. Each "set" pushes an encrypted
+command over LoRa; the node validates it exactly like the CLI `set`,
+saves to flash, and heartbeats back as confirmation (WiFi-radar changes
+also restart the sensor, so expect a short "calibrating" after changing
+radar settings). Same rules as recal: awake nodes only, and the same
+API-token/loopback protection applies.
+
+**Calibration is time-bounded.** Baseline learning targets
+`csi_calib_s × csi_ping_hz` frames, but if frames arrive slower than
+expected (weak link, lone node), it now self-completes after 4× the
+configured calibration time as long as at least one full window of
+samples was collected — so "calibrating" always clears when any traffic
+flows.
+
 **Tuning.** `csi` on the CLI prints status; `csi 30` streams the live
 metric for 30 s — walk the perimeter and pick a threshold ~2× the largest
 quiet-time metric you see. Raise `csi_window_frames` for fewer false

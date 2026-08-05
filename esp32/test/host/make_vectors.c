@@ -47,8 +47,14 @@ int main(void) {
     hexdump("ack", frame, n);
 
     /* Gateway->node command: CSI recalibrate (downlink, msg type 0x04) */
-    sps_cmd_t cmd = { .cmd = SPS_CMD_CSI_RECAL, .arg = 0 };
+    sps_cmd_t cmd = { .cmd = SPS_CMD_CSI_RECAL, .param = 0, .value = 0 };
     n = sps_seal_cmd(key, 7, 0x0102, 0x000101, &cmd, frame, sizeof(frame));
     hexdump("cmd_recal", frame, n);
+
+    /* Gateway->node command: SET csi_threshold = 2.50 (x100 = 250) */
+    sps_cmd_t cset = { .cmd = SPS_CMD_SET, .param = SPS_SET_CSI_THRESHOLD,
+                       .value = 250 };
+    n = sps_seal_cmd(key, 7, 0x0102, 0x000102, &cset, frame, sizeof(frame));
+    hexdump("cmd_set", frame, n);
     return 0;
 }

@@ -906,9 +906,52 @@ void loop() {
         uint32_t cseq;
         if (link_.receiveCommand(&cmd, &cseq)) {
             cmdSeqPersist(cseq);   /* write-ahead: floor survives reboot */
-            Serial.printf("[cmd] gateway command seq=%lu cmd=%u arg=%u\n",
-                          (unsigned long)cseq, cmd.cmd, cmd.arg);
-            if (cmd.cmd == SPS_CMD_CSI_RECAL) {
+            Serial.printf("[cmd] gateway command seq=%lu cmd=%u param=%u value=%u\n",
+                          (unsigned long)cseq, cmd.cmd, cmd.param, cmd.value);
+            if (cmd.cmd == SPS_CMD_SET) {
+                /* Remote `set` — same keys/validation as the CLI, persisted
+                 * to NVS. Confirmation is the immediate heartbeat. */
+                const char *key = nullptr;
+                String val;
+                switch (cmd.param) {
+                    case SPS_SET_CSI_THRESHOLD:
+                        key = "csi_threshold"; val = String(cmd.value / 100.0f, 2); break;
+                    case SPS_SET_CSI_WINDOW:
+                        key = "csi_window_frames"; val = String(cmd.value); break;
+                    case SPS_SET_CSI_CALIB_S:
+                        key = "csi_calib_s"; val = String(cmd.value); break;
+                    case SPS_SET_CSI_HOLDOFF_S:
+                        key = "csi_holdoff_s"; val = String(cmd.value); break;
+                    case SPS_SET_CSI_PING_HZ:
+                        key = "csi_ping_hz"; val = String(cmd.value); break;
+                    case SPS_SET_TRIGGER_RATIO:
+                        key = "trigger_ratio"; val = String(cmd.value / 100.0f, 2); break;
+                    case SPS_SET_MOTION_THRESH:
+                        /* CLI/config key is "motion_threshold" (no _g) */
+                        key = "motion_threshold"; val = String(cmd.value / 1000000.0f, 6); break;
+                    case SPS_SET_HEARTBEAT_PD:
+                        key = "heartbeat_per_day"; val = String(cmd.value); break;
+                    default: break;
+                }
+                if (key && configSet(cfg, key, val) && configSave(cfg)) {
+                    Serial.printf("[cmd] set %s=%s (gateway, saved)\n", key, val.c_str());
+#if SPS_CSI_ENABLE
+                    /* CSI params take effect via a sensor restart (which
+                     * also re-runs baseline calibration — desirable after
+                     * a sensitivity change). */
+                    if (strncmp(key, "csi_", 4) == 0 && csiOk && csi.running()) {
+                        csi.end();
+                        csiOk = csi.begin(cfg);
+                        Serial.println(csiOk ? "[csi] restarted with new settings"
+                                             : "[csi] RESTART FAILED");
+                    }
+#endif
+                    sendHeartbeat();   /* confirmation */
+                } else {
+                    Serial.printf("[cmd] SET param=%u rejected (bad param/value)\n",
+                                  cmd.param);
+                }
+            } else if (cmd.cmd == SPS_CMD_CSI_RECAL) {
 #if SPS_CSI_ENABLE
                 if (csiOk && csi.running()) {
                     csi.recalibrate();

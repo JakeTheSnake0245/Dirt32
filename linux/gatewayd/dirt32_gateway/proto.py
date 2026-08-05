@@ -27,7 +27,7 @@ MSG_CMD = 0x04          # gateway -> node command (downlink)
 ALERT_PLEN = 10
 HEARTBEAT_PLEN = 22
 ACK_PLEN = 4
-CMD_PLEN = 2            # CMD1 ARG1
+CMD_PLEN = 4            # CMD1 PARAM1 VALUE2
 PAYLOAD_LEN = {MSG_ALERT: ALERT_PLEN, MSG_HEARTBEAT: HEARTBEAT_PLEN,
                MSG_ACK: ACK_PLEN, MSG_CMD: CMD_PLEN}
 
@@ -36,6 +36,20 @@ PAYLOAD_LEN = {MSG_ALERT: ALERT_PLEN, MSG_HEARTBEAT: HEARTBEAT_PLEN,
 # window for it). No command ACK — confirmation is observable behavior
 # (e.g. next heartbeat's HF_CSI_CALIB after a CSI_RECAL).
 CMD_CSI_RECAL = 1       # restart WiFi-radar baseline calibration
+CMD_SET = 2             # set config parameter (param id + u16 value)
+
+# SET parameters exposed to the web GUI: name -> (param_id, scale, label,
+# min, max). Raw u16 sent over the air = round(human_value * scale).
+SET_PARAMS = {
+    "csi_threshold":     (1, 100,     "WiFi radar sensitivity threshold", 1.0, 20.0),
+    "csi_window_frames": (2, 1,       "WiFi radar window (frames)",       8,   128),
+    "csi_calib_s":       (3, 1,       "WiFi radar calibration (s)",       5,   600),
+    "csi_holdoff_s":     (4, 1,       "WiFi radar hold-off (s)",          0,   600),
+    "csi_ping_hz":       (5, 1,       "WiFi radar ping rate (Hz)",        1,   50),
+    "trigger_ratio":     (6, 100,     "Seismic trigger ratio",            1.0, 50.0),
+    "motion_threshold_g": (7, 1000000, "Wake threshold (g)",              0.0005, 0.06),
+    "heartbeat_per_day": (8, 1,       "Heartbeats per day",               1,   288),
+}
 
 EV_NAMES = {0: "unknown", 1: "footstep", 2: "vehicle", 3: "multiple",
             4: "wifi_presence"}
@@ -231,14 +245,15 @@ class Ack:
 @dataclass
 class Cmd:
     cmd: int
-    arg: int = 0
+    param: int = 0
+    value: int = 0
 
     def pack(self) -> bytes:
-        return bytes([self.cmd, self.arg])
+        return struct.pack("<BBH", self.cmd, self.param, self.value)
 
     @staticmethod
     def unpack(b: bytes) -> "Cmd":
-        return Cmd(b[0], b[1])
+        return Cmd(*struct.unpack("<BBH", b[:4]))
 
 
 def seal(key: bytes, hdr: Header, payload: bytes) -> bytes:

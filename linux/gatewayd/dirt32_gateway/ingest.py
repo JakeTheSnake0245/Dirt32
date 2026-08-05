@@ -177,7 +177,7 @@ class Ingest:
 
     # ------------------------------------------------------------------
 
-    def send_cmd(self, node_id: int, cmd: int, arg: int = 0,
+    def send_cmd(self, node_id: int, cmd: int, param: int = 0, value: int = 0,
                  copies: int = 3, spacing_s: float = 0.35) -> bool:
         """Seal and transmit a gateway->node command over the bridge.
 
@@ -195,7 +195,7 @@ class Ingest:
             return False
         seq = self.db.next_down_seq(node_id)
         hdr = proto.Header(self.net_id, proto.MSG_CMD, node_id, seq)
-        frame = proto.seal(key, hdr, proto.Cmd(cmd, arg).pack())
+        frame = proto.seal(key, hdr, proto.Cmd(cmd, param, value).pack())
         try:
             for i in range(max(1, copies)):
                 if i:
@@ -204,10 +204,10 @@ class Ingest:
         except Exception as e:              # noqa: BLE001
             self.log(f"[cmd] send failed node={node_id}: {e}")
             return False
-        self.log(f"[cmd] sent cmd={cmd} arg={arg} node={node_id} "
-                 f"seq={seq} x{copies}")
-        self.on_event("cmd", {"node_id": node_id, "cmd": cmd, "arg": arg,
-                              "at": time.time()})
+        self.log(f"[cmd] sent cmd={cmd} param={param} value={value} "
+                 f"node={node_id} seq={seq} x{copies}")
+        self.on_event("cmd", {"node_id": node_id, "cmd": cmd, "param": param,
+                              "value": value, "at": time.time()})
         return True
 
     def publish_status(self, node_id: int):

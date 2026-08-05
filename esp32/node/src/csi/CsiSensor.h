@@ -60,6 +60,8 @@ public:
        re-baseline). Keep the area clear for csi_calib_s afterwards. */
     void recalibrate() {
         _baseline = 0; _calibSamples = 0;
+        _calibNeeded = _calibNeededCfg;   /* undo any traffic-limited shrink */
+        _calibStartMs = millis();
         _winLen = 0; _winPos = 0;
         _inEvent = false; _holdoffUntil = 0;
         _lastMetric = 0;
@@ -84,7 +86,10 @@ private:
     uint8_t  _role = 2;          /* 0=rx-only 1=tx-only 2=both */
     float    _threshold = 2.0f;  /* trigger at metric >= threshold */
     uint16_t _window = 64;       /* moving-variance window, frames */
-    uint16_t _calibNeeded = 0;   /* frames of baseline calibration */
+    uint32_t _calibNeeded = 0;   /* frames of baseline calibration */
+    uint32_t _calibNeededCfg = 0;   /* configured value (recal restores it) */
+    uint32_t _calibStartMs = 0;
+    uint32_t _calibTimeoutMs = 0;   /* 4x csi_calib_s: time-bounded finish */
     uint32_t _holdoffMs = 5000;
     uint32_t _pingIntervalMs = 100;
 

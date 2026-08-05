@@ -65,13 +65,26 @@ class CrossVector(unittest.TestCase):
         cmd = proto.Cmd.unpack(pt)
         self.assertEqual((hdr.net_id, hdr.node_id, hdr.seq, hdr.msg_type),
                          (7, 0x0102, 0x000101, proto.MSG_CMD))
-        self.assertEqual((cmd.cmd, cmd.arg), (proto.CMD_CSI_RECAL, 0))
+        self.assertEqual((cmd.cmd, cmd.param, cmd.value),
+                         (proto.CMD_CSI_RECAL, 0, 0))
+
+    def test_cmd_set_from_c(self):
+        """SET csi_threshold=2.50 (param 1, value 250), C-sealed."""
+        hdr, pt = proto.open_frame(KEY, VECTORS["cmd_set"])
+        cmd = proto.Cmd.unpack(pt)
+        self.assertEqual(hdr.seq, 0x000102)
+        self.assertEqual((cmd.cmd, cmd.param, cmd.value),
+                         (proto.CMD_SET, proto.SET_PARAMS["csi_threshold"][0],
+                          250))
 
     def test_cmd_python_seal_matches_c(self):
         """Python-sealed CMD must be byte-identical to the C library's."""
         hdr = proto.Header(7, proto.MSG_CMD, 0x0102, 0x000101)
-        frame = proto.seal(KEY, hdr, proto.Cmd(proto.CMD_CSI_RECAL, 0).pack())
+        frame = proto.seal(KEY, hdr, proto.Cmd(proto.CMD_CSI_RECAL).pack())
         self.assertEqual(frame, VECTORS["cmd_recal"])
+        hdr = proto.Header(7, proto.MSG_CMD, 0x0102, 0x000102)
+        frame = proto.seal(KEY, hdr, proto.Cmd(proto.CMD_SET, 1, 250).pack())
+        self.assertEqual(frame, VECTORS["cmd_set"])
 
     def test_python_seal_reopens(self):
         """Python-sealed frame opens in Python (and, by the vectors above,

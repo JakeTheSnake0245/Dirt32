@@ -93,11 +93,13 @@ void sps_ack_read(const uint8_t in[SPS_ACK_PLEN], sps_ack_t *a) {
 
 void sps_cmd_write(const sps_cmd_t *c, uint8_t out[SPS_CMD_PLEN]) {
     out[0] = c->cmd;
-    out[1] = c->arg;
+    out[1] = c->param;
+    put16(out + 2, c->value);
 }
 void sps_cmd_read(const uint8_t in[SPS_CMD_PLEN], sps_cmd_t *c) {
-    c->cmd = in[0];
-    c->arg = in[1];
+    c->cmd   = in[0];
+    c->param = in[1];
+    c->value = get16(in + 2);
 }
 
 /* ---------- Nonce ---------- */

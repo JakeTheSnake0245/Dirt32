@@ -49,14 +49,25 @@ extern "C" {
 #define SPS_ALERT_PLEN       10u  /* TIMESTAMP4 CLASS1 CONF1 PEAK2 BATT2 */
 #define SPS_HEARTBEAT_PLEN   22u  /* TS4 BATT2 LAT4 LON4 FLAGS1 NOISE2 FW1 RST2 CSI2 */
 #define SPS_ACK_PLEN         4u   /* ACK_SEQ3 STATUS1 */
-#define SPS_CMD_PLEN         2u   /* CMD1 ARG1 */
+#define SPS_CMD_PLEN         4u   /* CMD1 PARAM1 VALUE2 */
 
 /* Command IDs (SPS_MSG_CMD payload). Header NODE_ID is the destination;
  * SEQ is the gateway's per-node downlink counter (own replay window on
  * the node, separate from the ACK window). No command ACK: confirmation
  * is observable node behavior (e.g. the next heartbeat's CSI_CALIB flag
- * after a CSI_RECAL). */
+ * after a CSI_RECAL, or the changed behavior after a SET). */
 #define SPS_CMD_CSI_RECAL    1u   /* restart WiFi-radar baseline calibration */
+#define SPS_CMD_SET          2u   /* set config parameter (PARAM id, VALUE u16) */
+
+/* SPS_CMD_SET parameter ids. VALUE is u16; scaled params noted. */
+#define SPS_SET_CSI_THRESHOLD    1u  /* value = threshold x100 */
+#define SPS_SET_CSI_WINDOW       2u  /* frames (8..128) */
+#define SPS_SET_CSI_CALIB_S      3u  /* seconds */
+#define SPS_SET_CSI_HOLDOFF_S    4u  /* seconds */
+#define SPS_SET_CSI_PING_HZ      5u  /* Hz */
+#define SPS_SET_TRIGGER_RATIO    6u  /* seismic STA/LTA ratio x100 */
+#define SPS_SET_MOTION_THRESH    7u  /* wake threshold in micro-g */
+#define SPS_SET_HEARTBEAT_PD     8u  /* heartbeats per day */
 
 #define SPS_MAX_PLEN         SPS_HEARTBEAT_PLEN
 #define SPS_MAX_FRAME        (SPS_HDR_LEN + SPS_MAX_PLEN + SPS_TAG_LEN)
@@ -137,8 +148,9 @@ typedef struct {
 } sps_ack_t;
 
 typedef struct {
-    uint8_t cmd;           /* SPS_CMD_* */
-    uint8_t arg;           /* command-specific, 0 if unused */
+    uint8_t  cmd;          /* SPS_CMD_* */
+    uint8_t  param;        /* SPS_SET_* for SET; 0 if unused */
+    uint16_t value;        /* SET value (scaled per param); 0 if unused */
 } sps_cmd_t;
 
 /* ---------- Header ---------- */

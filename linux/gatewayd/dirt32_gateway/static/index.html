@@ -46,6 +46,17 @@
     color: var(--cyan); font: inherit; font-size: 11px; cursor: pointer;
     padding: 0 6px; border-radius: 3px; vertical-align: middle; }
   button.recal:disabled { opacity: 0.5; cursor: default; }
+  button.gear { border-color: var(--dim, #667); color: var(--dim, #889); }
+  .settings { margin: 6px 0 2px; padding: 6px 8px; border-left: 2px solid #345; }
+  .setrow { display: flex; gap: 6px; align-items: center; margin: 3px 0; }
+  .setrow label { flex: 1; font-size: 11px; opacity: 0.8; }
+  .setrow input { width: 70px; background: #10161d; color: inherit;
+    border: 1px solid #345; border-radius: 3px; font: inherit; font-size: 11px;
+    padding: 1px 4px; }
+  .setrow button { background: none; border: 1px solid var(--cyan);
+    color: var(--cyan); font: inherit; font-size: 11px; cursor: pointer;
+    padding: 0 6px; border-radius: 3px; }
+  .sethint { font-size: 10px; opacity: 0.5; margin-top: 4px; }
   .ev.heartbeat { border-left: 3px solid #223042; }
   .ev.status { border-left: 3px solid #2a2a1a; color: var(--dim); }
   .leaflet-container { font: inherit; }
@@ -145,30 +156,30 @@ function renderNodes(nodes) {
       ? ` <button class="recal" data-node="${n.node_id}" title=
 "Restart WiFi-radar baseline calibration on this node (keep the area clear ~30s)"
 >recal</button>` : "";
+    const gearBtn = ` <button class="recal gear" title="node settings">⚙</button>`;
     div.innerHTML =
       `<span class="st" style="color:${COLORS[n.color]}">#${n.node_id}` +
-      `${n.name ? " · " + n.name : ""}</span>${recalBtn}` +
+      `${n.name ? " · " + n.name : ""}</span>${recalBtn}${gearBtn}` +
       `<div class="meta">${n.reasons.join(" · ")} — seen ${fmtAgo(n.last_seen)}` +
-      `${n.battery_mv ? " · " + n.battery_mv + " mV" : ""}${csiMeta}</div>`;
+      `${n.battery_mv ? " · " + n.battery_mv + " mV" : ""}${csiMeta}</div>` +
+      `<div class="settings" style="display:none"></div>`;
     if (hasPos) div.onclick = () => map.setView([n.lat, n.lon], 17);
-    const btn = div.querySelector("button.recal");
+    const btn = div.querySelector("button.recal:not(.gear)");
     if (btn) btn.onclick = async (ev) => {
       ev.stopPropagation();
       btn.disabled = true; btn.textContent = "…";
-      try {
-        const post = () => fetch(`${base}/gw/nodes/${n.node_id}/recal`, {
-          method: "POST",
-          headers: localStorage.apiToken
-            ? { "X-Api-Token": localStorage.apiToken } : {} });
-        let resp = await post();
-        if (resp.status === 401) {
-          const t = prompt("API token (web.api_token in gateway.json):");
-          if (t) { localStorage.apiToken = t; resp = await post(); }
-        }
-        const r = await resp.json();
-        btn.textContent = r.ok ? "sent ✓" : "failed";
-      } catch { btn.textContent = "failed"; }
+      const r = await authedPost(`/gw/nodes/${n.node_id}/recal`);
+      btn.textContent = r.ok ? "sent ✓" : "failed";
       setTimeout(() => { btn.disabled = false; btn.textContent = "recal"; }, 4000);
+    };
+    const gear = div.querySelector("button.gear");
+    gear.onclick = (ev) => {
+      ev.stopPropagation();
+      const panel = div.querySelector(".settings");
+      if (panel.style.display === "none") {
+        buildSettings(panel, n);
+        panel.style.display = "block";
+      } else panel.style.display = "none";
     };
     list.appendChild(div);
   }
@@ -179,6 +190,72 @@ function renderNodes(nodes) {
     map.fitBounds(pts, { padding: [40, 40] });
     fitted = true;
   }
+}
+
+async function authedPost(path, body) {
+  const post = () => fetch(base + path, {
+    method: "POST",
+    headers: Object.assign(
+      body ? { "Content-Type": "application/json" } : {},
+      localStorage.apiToken ? { "X-Api-Token": localStorage.apiToken } : {}),
+    body: body ? JSON.stringify(body) : undefined });
+  try {
+    let resp = await post();
+    if (resp.status === 401) {
+      const t = prompt("API token (web.api_token in gateway.json):");
+      if (t) { localStorage.apiToken = t; resp = await post(); }
+    }
+    return await resp.json();
+  } catch { return { ok: false, error: "network" }; }
+}
+
+// Per-node remote settings (sent over LoRa; the node validates, saves to
+// flash, and heartbeats back as confirmation).
+const SETTINGS = [
+  { param: "csi_threshold",      label: "radar sensitivity threshold", step: 0.1,  csi: true,
+    hint: "trigger at metric ≥ this; lower = more sensitive (default 2.0)" },
+  { param: "csi_holdoff_s",      label: "radar hold-off (s)",          step: 1,    csi: true,
+    hint: "quiet time after an event (default 5)" },
+  { param: "csi_calib_s",        label: "radar calibration (s)",       step: 5,    csi: true,
+    hint: "baseline learning time (default 30)" },
+  { param: "csi_ping_hz",        label: "radar ping rate (Hz)",        step: 1,    csi: true,
+    hint: "WiFi sensing traffic rate (default 10)" },
+  { param: "trigger_ratio",      label: "seismic trigger ratio",       step: 0.1,  csi: false,
+    hint: "STA/LTA ratio; lower = more sensitive (default 2.0)" },
+  { param: "motion_threshold_g", label: "wake threshold (g)",          step: 0.0005, csi: false,
+    hint: "accelerometer wake level; lower = more sensitive (default 0.0025)" },
+  { param: "heartbeat_per_day",  label: "heartbeats per day",          step: 1,    csi: false,
+    hint: "liveness reports (default 24)" },
+];
+
+function buildSettings(panel, n) {
+  panel.innerHTML = "";
+  panel.onclick = (ev) => ev.stopPropagation();
+  for (const s of SETTINGS) {
+    if (s.csi && !n.csi_on) continue;
+    const row = document.createElement("div");
+    row.className = "setrow";
+    row.innerHTML =
+      `<label title="${s.hint}">${s.label}</label>` +
+      `<input type="number" step="${s.step}" placeholder="—">` +
+      `<button>set</button>`;
+    const inp = row.querySelector("input"), b = row.querySelector("button");
+    b.onclick = async () => {
+      const v = parseFloat(inp.value);
+      if (isNaN(v)) { b.textContent = "?"; setTimeout(() => b.textContent = "set", 1500); return; }
+      b.disabled = true; b.textContent = "…";
+      const r = await authedPost(`/gw/nodes/${n.node_id}/set`,
+                                 { param: s.param, value: v });
+      b.textContent = r.ok ? "✓" : "✗";
+      if (!r.ok && r.error) console.warn("set failed:", r.error);
+      setTimeout(() => { b.disabled = false; b.textContent = "set"; }, 3000);
+    };
+    panel.appendChild(row);
+  }
+  const note = document.createElement("div");
+  note.className = "sethint";
+  note.textContent = "sent over LoRa · node saves to flash & heartbeats back";
+  panel.appendChild(note);
 }
 
 function pushFeed(e) {
@@ -198,7 +275,8 @@ function pushFeed(e) {
   else if (e.kind === "heartbeat")
     msg = `node #${d.node_id} heartbeat · ${d.battery_mv} mV`;
   else if (e.kind === "cmd")
-    msg = `<span class="csi">ᯤ node #${d.node_id} recalibrate sent</span>`;
+    msg = `<span class="csi">ᯤ node #${d.node_id} ${d.cmd === 2
+          ? "setting sent" : "recalibrate sent"}</span>`;
   else
     msg = `node #${d.node_id} → ${d.color}` +
           (d.reasons?.length ? ` (${d.reasons[0]})` : "");

@@ -44,7 +44,12 @@ static void IRAM_ATTR csi_rx_cb(void *ctx, wifi_csi_info_t *info) {
      * to be our 8-byte ESP-NOW pings — beacons are legacy too but run
      * 100+ bytes, so the length gate rejects them. */
     if (info->rx_ctrl.sig_mode != 0) return;      /* HT/VHT frame — skip */
-    if (info->rx_ctrl.sig_len > 64) return;       /* too big to be a ping */
+    /* ESP-NOW pings are vendor action frames: MAC header + action fields +
+     * vendor payload + FCS lands well under 100 bytes even with our 8-byte
+     * payload; beacons run 150-300+. 100 keeps the input homogeneous while
+     * not starving on real ping sizes (the earlier 64 gate was too tight
+     * and rejected peer pings — ~0.5 fps instead of ~10). */
+    if (info->rx_ctrl.sig_len > 100) return;      /* too big to be a ping */
 
     /* info->buf is interleaved int8 imag/real pairs. Use the middle
      * subcarriers (skip guard/DC region at both ends). */
@@ -82,6 +87,9 @@ bool CsiSensor::begin(const NodeConfig &cfg) {
        min 4 windows so the baseline is a real quiescent estimate */
     _calibNeeded = (uint32_t)cfg.csi_calib_s * (cfg.csi_ping_hz ? cfg.csi_ping_hz : 10);
     if (_calibNeeded < (uint32_t)_window * 4) _calibNeeded = (uint32_t)_window * 4;
+    _calibNeededCfg = _calibNeeded;
+    _calibTimeoutMs = (uint32_t)cfg.csi_calib_s * 1000UL * 4;
+    _calibStartMs = millis();
     _baseline = 0; _calibSamples = 0;
     _winLen = 0; _winPos = 0; _inEvent = false; _holdoffUntil = 0;
     _head = 0; _tail = 0; _frames = 0;
@@ -162,6 +170,18 @@ uint16_t CsiSensor::noiseX100() const {
 CsiEvent CsiSensor::poll() {
     CsiEvent ev;
     if (!_running) return ev;
+
+    /* Time-bounded calibration: the frame budget assumes csi_ping_hz
+     * traffic. If frames trickle in slower (weak link, lone node on a
+     * quiet channel), accept whatever baseline we have after 4x the
+     * configured calibration time — as long as at least one full window
+     * of variance samples went into it. Otherwise "calibrating" never
+     * clears and the radar never arms. */
+    if (_calibSamples < _calibNeeded &&
+        millis() - _calibStartMs > _calibTimeoutMs &&
+        _calibSamples >= _window) {
+        _calibNeeded = _calibSamples;    /* done — traffic-limited baseline */
+    }
 
     /* Drain the ring into the moving window. */
     uint16_t head = _head;
