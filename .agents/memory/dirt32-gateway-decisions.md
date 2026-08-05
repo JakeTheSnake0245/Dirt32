@@ -15,3 +15,11 @@ description: Non-obvious architecture decisions for the Pi gateway + bridge tier
 - **Pi serial parser:** strict regex `^RX ([0-9a-fA-F]{2,128}) (-?\d+) (-?\d+)$`; flush accumulation buffer (`buf = b""`) on any mismatch so garbled fragment can't corrupt next line. SNR sent as `int(snr*10)` to avoid float printf bugs on ESP32-S3.
 - Status colors (user-specified): green = heartbeats OK; yellow = silent >12 h, battery low, sensor/self-test fault; red = tamper, moved > threshold from provisioned position, silent >24 h. Configurable in `gateway.json`.
 - V4 FEM pin constraint: GPIO 2/5/7/46 are used by the Heltec V4's RF front-end — never assign them to sensors.
+
+## Downlink commands (gateway → node)
+- MSG_CMD 0x04 (CMD1 ARG1); nonce includes MSG_TYPE, so uplink/downlink SEQ spaces can't collide.
+- Gateway downlink SEQ is per-node, persisted in the DB (`down_seq`), strictly monotonic.
+- No command ACK: gateway sends ~3 identical copies; node dedupes via strict `seq > floor`; confirmation is observable behavior (e.g. heartbeat CSI_CALIB flag after CSI_RECAL).
+- Node persists the downlink SEQ floor in NVS ("sps"/"cmd_seq", write-ahead before acting) — windowed replay state in RAM was rejected in review as not reboot-safe.
+- Web POST actions are loopback-only unless `web.api_token` is set (X-Api-Token header, constant-time compare). GETs stay open.
+- Nodes only hear commands while awake (CSI/geophone/bench); armed deep-sleep nodes are unreachable between wakes.
