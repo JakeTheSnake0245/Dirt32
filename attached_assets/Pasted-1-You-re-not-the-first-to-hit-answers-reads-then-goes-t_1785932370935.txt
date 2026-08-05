@@ -1,0 +1,32 @@
+1. You're not the first to hit "answers reads, then goes to zero, only a power cycle revives it." On ADI's own forum, a user reported intermittent ADXL355/ADXL357 failures — outputs stuck at zero or large bias errors, usually cleared only by power cycling, sometimes needing several cycles, across multiple parts — and ADI replied they hadn't seen it before. So this is a real, under-explained ADXL355 failure class, not a one-off cooked chip. 
+iu
+
+2. The mechanism is the NVM controller — and the smoking gun is in the datasheet you sent me. Two linked facts:
+
+The ADXL355 returns zeros while its internal NVM controller is busy. Forum guidance: poll the NVM_BUSY bit (Status reg 0x04) and allow a minimum ~170 µs delay between commands, or register reads come back zero. So a "DEVID = 0x00" read taken right after a mode change can be NVM-busy garbage, not a dead part. 
+Strawberry-linux
+More decisively: the Reset-register note in your datasheet warns that on parts with REVID = 0x01 or earlier — which yours is — a software reset can trigger a race that loads the NVM factory trim incorrectly into the shadow registers, corrupting behavior, and that this does not happen on power-on or a power cycle, only on a software reset. Recovery requires physical power removal.
+
+That is your exact signature: fine until a reset/mode event, then wedged, revived only by a true power cycle — never by the ESP32's soft reboot (which is what RTC_SW_CPU_RST is on every reflash).
+
+3. This reframes the whole latch-up-vs-dead-die debate you and Replit are stuck in. Latch-up, a damaged die, and the NVM/software-reset race all predict "only a power cycle recovers." So Replit's Ve-cycle test cannot distinguish them, and "recovered after Ve cycle" is not evidence for supply latch-up specifically. But the NVM/reset explanation is the only one that is (a) documented by ADI for your precise REVID, (b) a firmware bug you can fix, and (c) consistent with the chip answering IDs and surviving all four config writes before going dark. It's both better-supported and far cheaper to rule out than swapping modules.
+
+The test that actually separates them: does Dirt32's ADXL init — or its watchdog-recovery path — write 0x52 to the Reset register (0x2F), or otherwise assume the sensor survives the ESP32's soft reset? On a REVID-0x01 part, that's your prime suspect. Fixes, in order:
+
+Never software-reset the ADXL — recover only by cycling Ve (which you already added). A real power cycle sidesteps the race entirely.
+Add NVM_BUSY polling + ~200 µs settle after each config write and after the standby→measure transition; re-read DEVID only once NVM_BUSY is clear before the watchdog declares death.
+If you ever must soft-reset, implement ADI's documented workaround: read shadow registers 0x50–0x54 at power-up, store them, and after any reset re-read and compare, repeating until they match.
+
+4. Reference implementations to diff your init against:
+
+Closest to your build by far: MoustachedBird/ESP32_seismic_datalogger — an ESP32 datalogger using the SM-24 geophone plus the ADXL355, in ESP-IDF/C. Literally your sensor combo; read how it sequences the part.
+ADI's official Rust driver (adi-adxl355-rs) with SPI and I2C support, and their no-OS C driver — canonical measurement-mode entry sequences. 
+EngineerZone
+One corroborating gotcha: an EVAL-ADXL355-PMDZ on an STM32 LoRa Discovery kit read all zeros until SPI was switched to CPOL=0/CPHA=0 (mode 0). Your reads work, so mode is right — but confirm your config writes use identical SPI settings. 
+github
+
+5. What I did not find: nobody has published this exact Heltec-V4 + EVAL-ADXL355-PMDZ pairing — it's a novel combo — and no field report ties your symptom to the shared-radio-SPI bus. So I'd downgrade my earlier bus-sharing theory relative to this one. The shared-SCLK warning is still real and worth removing (via the dedicated-bus remap the V4 needs anyway), but your power-cycle-only-recovery behavior is far better explained by the NVM/software-reset race on a REVID-0x01 part.
+
+Bottom line: before you condemn the chip as a dead analog die, check whether init does a software reset and how it handles NVM_BUSY — the literature says a soft-reset REVID-0x01 ADXL355 can wedge into a power-cycle-only state that is indistinguishable from latch-up, and that's a firmware fix, not a hardware funeral.
+
+Want me to write the precise init changes for Replit — drop any software reset, add NVM_BUSY polling with settle delays, and the shadow-register compare — so you can test this hypothesis directly?

@@ -153,7 +153,30 @@ bool Adxl355FrontEnd::begin(uint16_t sample_rate_hz) {
      * temp ADC removes one analog block from the turn-on load. */
     regWrite(REG_POWER_CTL, 0x06);          /* measure, TEMP_OFF + DRDY_OFF */
     delay(20);
-    if (!still("POWER_CTL=measure+DRDY_OFF (+20ms)")) return false;
+    if (!still("POWER_CTL=measure+DRDY_OFF (+20ms)")) {
+        /* Postmortem showed a blind standby write revives the "dead" bus:
+         * MISO is being CLAMPED low by a pin that drives only in measurement
+         * mode. DRDY_OFF (bit2) *forces the DRDY pin LOW* in measurement —
+         * so if DRDY is bridged to MISO, this is exactly the signature.
+         * Discriminator: revive via standby, re-enter measurement with DRDY
+         * ENABLED (0x02 = TEMP_OFF only). If reads now work, the DRDY pad
+         * is shorted to MISO — a wiring fault, not a chip fault. */
+        regWrite(REG_POWER_CTL, 0x01);  delay(10);
+        if (reg(REG_DEVID_AD) == 0xAD) {
+            Serial.println("[adxl355] revived by standby write — MISO clamp confirmed. Retrying measure with DRDY ENABLED (0x02)...");
+            regWrite(REG_POWER_CTL, 0x02);  delay(20);
+            uint8_t d2 = reg(REG_DEVID_AD);
+            if (d2 == 0xAD) {
+                Serial.println("[adxl355] >>> ALIVE in measurement with DRDY enabled <<<");
+                Serial.println("[adxl355] VERDICT: the DRDY pad (PMDZ pin 10) is shorted/bridged to MISO (PMDZ pin 3).");
+                Serial.println("[adxl355] DRDY_OFF forces DRDY LOW, clamping MISO. Fix the wiring; running with DRDY on for now.");
+                delay(200);
+                return still("measure DRDY-on +200ms");
+            }
+            Serial.printf("[adxl355] still clamped with DRDY enabled (DEVID=0x%02X) — clamp is INT2/other measurement output, check PMDZ pins 7/9 vs 3\n", d2);
+        }
+        return false;
+    }
     delay(200);
     if (!still("measure +200ms")) return false;
     return true;
