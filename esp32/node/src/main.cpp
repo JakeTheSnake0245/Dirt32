@@ -34,12 +34,17 @@
 RTC_DATA_ATTR static uint32_t rtc_seq = 0;          /* survives deep sleep */
 RTC_DATA_ATTR static uint16_t rtc_reset_count = 0;
 RTC_DATA_ATTR static bool     rtc_tamper = false;
+/* Self-test result persists across deep-sleep wakes: run automatically at
+ * cold boot, re-run any time via the `selftest` CLI command. Without this,
+ * armed nodes heartbeat "self-test failed" forever and sit yellow on the
+ * gateway map. */
+RTC_DATA_ATTR static bool     rtc_selftest_ok = false;
 
 static NodeConfig cfg;
 static LoRaLink link_;
 static FrontEnd *frontEnd = nullptr;
 static StaLta detector;
-static bool radioOk = false, sensorOk = false, selfTestOk = false;
+static bool radioOk = false, sensorOk = false;
 static DebugScreen dbgScreen;
 
 /* ---------- SEQ management ----------
@@ -220,7 +225,7 @@ static void sendHeartbeat(bool deployFlag = false) {
     hb.lon_e7 = fix.valid ? fix.lon_e7 : cfg.fallback_lon_e7;
     hb.health_flags = (sensorOk ? SPS_HF_SENSOR_OK : 0) |
                       (fix.valid ? SPS_HF_GPS_FIX : 0) |
-                      (selfTestOk ? SPS_HF_SELFTEST : 0) |
+                      (rtc_selftest_ok ? SPS_HF_SELFTEST : 0) |
                       (rtc_tamper ? SPS_HF_TAMPER : 0) |
                       (onSolar() ? SPS_HF_ON_SOLAR : 0) |
                       (deployFlag ? SPS_HF_DEPLOY : 0);
@@ -414,8 +419,8 @@ static void handleCli(String line) {
         Serial.println("[sensorid] done");
     }
     else if (cmd == "selftest") {
-        selfTestOk = frontEnd && frontEnd->selfTest();
-        Serial.println(selfTestOk ? "self-test PASS" : "self-test FAIL");
+        rtc_selftest_ok = frontEnd && frontEnd->selfTest();
+        Serial.println(rtc_selftest_ok ? "self-test PASS" : "self-test FAIL");
     }
     else if (cmd == "seqreset") {
         /* ONLY after rotating the PSK — resets the nonce space. */
@@ -717,6 +722,17 @@ void setup() {
         sendHeartbeat();
         goToSleep();
     }
+    /* Cold boot: run the sensor self-test automatically so heartbeats carry
+     * a truthful HF_SELFTEST bit without anyone typing `selftest`. The
+     * result persists in RTC memory across all deep-sleep wakes. */
+    if (sensorOk && frontEnd) {
+        rtc_selftest_ok = frontEnd->selfTest();
+        Serial.println(rtc_selftest_ok ? "[boot] self-test PASS"
+                                       : "[boot] self-test FAIL");
+    } else {
+        rtc_selftest_ok = false;
+    }
+
     /* Cold boot: stay awake for provisioning/bench work.
        Geophone profile also lives here: continuous listen in loop(). */
     dbgScreen.begin(PIN_BUTTON);
