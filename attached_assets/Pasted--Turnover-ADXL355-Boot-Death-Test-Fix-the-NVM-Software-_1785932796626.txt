@@ -1,0 +1,84 @@
+# Turnover: ADXL355 Boot-Death — Test & Fix the NVM / Software-Reset Race
+
+## Context
+The ADXL355 answers its ID reads and survives all four config writes, then goes to
+`DEVID = 0x00` ~20 ms after the standby→measurement transition, and only a **true power
+cycle** revives it — it stays dead across the ESP32's soft reset (`RTC_SW_CPU_RST`).
+
+The part reports **REVID = 0x01**. Analog Devices' datasheet documents a failure that
+matches this exactly: on **REVID 0x01 or earlier**, a **software reset** can hit a race
+that loads the NVM factory trim incorrectly into the shadow registers, corrupting the
+part — and this **does not occur on power-on or a power cycle, only on a software reset**,
+with recovery requiring physical power removal. Separately, the ADXL355 returns **zeros
+while its NVM controller is busy**, so a `DEVID = 0x00` read taken too soon after a mode
+change can be NVM-busy garbage, not a dead die.
+
+This change removes the software-reset path, handles NVM_BUSY correctly, and instruments
+the boot log so the outcome is decisive.
+
+---
+
+## Changes (node firmware — Adxl355FrontEnd + watchdog-recovery path)
+
+### A. Remove every software reset of the ADXL355
+- Grep the front-end init **and** the sensor-watchdog recovery path for any write of
+  `0x52` to register `0x2F` (RESET). **Remove it.**
+- Never software-reset the ADXL. The only reset mechanism is the **Ve power cycle** that
+  already exists in the recovery path.
+
+### B. Correct measurement-mode entry + NVM handling
+- Write **all** config registers while in **standby** (RANGE 0x2C, FILTER/ODR 0x28,
+  INT_MAP 0x2A, etc.) **before** touching POWER_CTL. Per datasheet, config changes are
+  only valid in standby.
+- **After each register write**, wait for NVM to settle: poll **Status (0x04) bit 4
+  (NVM_BUSY)** until 0 (with a timeout), and add a **~200 µs settle** after the
+  standby→measure write to POWER_CTL (0x2D).
+- **Do not treat a single `DEVID = 0x00` as death.** After entering measurement mode:
+  1. wait for NVM_BUSY = 0 (+ ~200 µs),
+  2. re-read `DEVID_AD` (0x00 → expect 0xAD) and `PARTID` (0x02 → expect 0xED),
+  3. only if they still fail *after NVM_BUSY is clear and a retry* is the part considered
+     gone.
+
+### C. Instrument the boot log so the result is unambiguous
+Print, per step, the NVM_BUSY state and the ID re-read result, e.g.:
+```
+[adxl355] standby set; NVM_BUSY cleared in 172us
+[adxl355] RANGE/FILTER/INT_MAP written; NVM clear
+[adxl355] measure entered (+200us settle) NVM_BUSY=0
+[adxl355] DEVID recheck: 0xAD/0xED — ALIVE          <-- hypothesis CONFIRMED (was firmware)
+```
+or
+```
+[adxl355] measure entered; DEVID 0x00 after NVM clear + retry
+[adxl355] Ve power-cycle (discharge 250ms) + retry...
+```
+
+### D. Recovery path (genuine failure only)
+On a confirmed failure, cut **Ve**, hold it low **≥ 200 ms fully discharged** (datasheet
+requires full discharge on power cycle — also add the ~100 kΩ bleed resistors on
+V1P8ANA/V1P8DIG to ground so the rail actually drains), restore Ve, retry. **Never**
+soft-reset as recovery.
+
+### E. Optional — only if a software reset ever becomes unavoidable
+Implement ADI's documented workaround: at power-up read shadow registers **0x50–0x54**,
+store them; after any reset re-read and compare; repeat the reset until they match.
+
+---
+
+## Decision tree (what the next boot log tells you)
+
+- **Survives measurement mode** with the software reset removed and NVM_BUSY respected
+  → it **was** the NVM / software-reset race. **Firmware bug, now fixed. Done.**
+- **Still dies at measure entry** even with (a) no software reset anywhere, (b) NVM_BUSY
+  polled and settle delays in place, and (c) a full **Ve power cycle with ≥200 ms
+  discharge** between attempts → the cause is **hardware** (latch-up or a damaged analog
+  die). Only now is swapping the module justified — and wire the replacement to the
+  **dedicated Option-1 SPI pins** (SCK 48 / MISO 4 / MOSI 33 / CS 47 / INT1 6) from first
+  power-up, never the shared radio SCLK.
+
+## Acceptance criteria
+- No write of `0x52` to `0x2F` exists in init or recovery.
+- Every config write is followed by an NVM_BUSY-clear wait; measure entry adds a settle.
+- The watchdog declares "dead" only after NVM_BUSY is clear **and** a delayed ID re-read
+  still fails.
+- Boot log prints NVM_BUSY state + ID re-read at each step, so the run self-diagnoses.
