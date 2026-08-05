@@ -758,6 +758,10 @@ void loop() {
 
     static String lineBuf;
     static bool autoArmCancelled = false;
+    /* Absolute arm deadline; cold-boot default from config, moved closer by
+     * the deploy TAP. 0 = not scheduled. */
+    static uint32_t armAtMs =
+        (cfg.auto_arm_s > 0) ? (uint32_t)cfg.auto_arm_s * 1000UL : 0;
     while (Serial.available()) {
         char c = (char)Serial.read();
         if (!autoArmCancelled && cfg.auto_arm_s > 0) {
@@ -773,11 +777,10 @@ void loop() {
     /* Deploy-and-forget: on a cold boot with healthy sensor+radio and an
      * untouched CLI, arm automatically after cfg.auto_arm_s seconds. Any
      * keystroke or button press cancels for this session. */
-    if (!autoArmCancelled && cfg.auto_arm_s > 0 && sensorOk && radioOk &&
+    if (!autoArmCancelled && armAtMs > 0 && sensorOk && radioOk &&
         cfg.front_end == FE_ADXL355) {
         static uint32_t lastCountdown = 0;
-        uint32_t deadline = (uint32_t)cfg.auto_arm_s * 1000UL;
-        uint32_t left = (millis() < deadline) ? deadline - millis() : 0;
+        uint32_t left = (millis() < armAtMs) ? armAtMs - millis() : 0;
         if (left == 0) {
             Serial.println("[auto-arm] arming now — motion-wake sleep cycle.");
             dbgScreen.showMessage("AUTO-ARM", "sleeping...", nullptr);
@@ -796,12 +799,21 @@ void loop() {
      *   SLEEP (8 s held)  → deep sleep (soft power-down) */
     switch (dbgScreen.poll()) {
         case BtnEvent::TAP: {
-            autoArmCancelled = true;   /* user is interacting — hold bench */
             Serial.println("[deploy] TAP — sending deploy heartbeat...");
             dbgScreen.showMessage("DEPLOYING...", "GPS fix...", nullptr);
             sendHeartbeat(/*deployFlag=*/true);
             /* After TX, show config page so user can verify params on screen */
             dbgScreen.showConfig(cfg, radioOk, rtc_seq);
+            /* Deploy means DEPLOY: (re)schedule arming shortly after the
+             * heartbeat, even if a keystroke had cancelled auto-arm. Gives
+             * the user 30 s to set the node down and step away. */
+            if (sensorOk && radioOk && cfg.front_end == FE_ADXL355) {
+                autoArmCancelled = false;
+                armAtMs = millis() + 30000UL;
+                Serial.println("[deploy] arming in 30s — any keystroke cancels.");
+            } else {
+                Serial.println("[deploy] NOT arming (sensor/radio init failed or geophone profile).");
+            }
             break;
         }
         case BtnEvent::HOLD:
