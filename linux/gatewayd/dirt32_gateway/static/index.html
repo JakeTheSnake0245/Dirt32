@@ -230,9 +230,9 @@ const SETTINGS = [
     hint: "baseline learning time (default 30)" },
   { param: "csi_ping_hz",        label: "radar ping rate (Hz)",        step: 1,    csi: true,
     hint: "WiFi sensing traffic rate (default 10)" },
-  { param: "trigger_ratio",      label: "seismic trigger ratio",       step: 0.1,  csi: false,
+  { param: "trigger_ratio",      label: "seismic trigger ratio",       step: 0.1,  seismic: true,
     hint: "STA/LTA ratio; lower = more sensitive (default 2.0)" },
-  { param: "motion_threshold_g", label: "wake threshold (g)",          step: 0.0005, csi: false,
+  { param: "motion_threshold_g", label: "wake threshold (g)",          step: 0.0005, seismic: true,
     hint: "accelerometer wake level; lower = more sensitive (default 0.0025)" },
   { param: "heartbeat_per_day",  label: "heartbeats per day",          step: 1,    csi: false,
     hint: "liveness reports (default 24)" },
@@ -243,6 +243,7 @@ function buildSettings(panel, n) {
   panel.onclick = (ev) => ev.stopPropagation();
   for (const s of SETTINGS) {
     if (s.csi && !n.csi_on) continue;
+    if (s.seismic && !n.seismic_ok) continue;   // no accelerometer fitted
     const row = document.createElement("div");
     row.className = "setrow";
     row.innerHTML =

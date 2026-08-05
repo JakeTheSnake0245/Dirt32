@@ -177,6 +177,7 @@ def make_handler(db: Db, feed: EventFeed, status_cfg: dict, cmd_sender=None,
                         "deploy":  bool((n.get("health_flags") or 0) & proto.HF_DEPLOY),
                         "noise_floor": n.get("noise_floor"),
                         # WiFi radar (CSI) status for the node detail view
+                        "seismic_ok": bool(flags & proto.HF_SENSOR_OK),
                         "csi_on": bool(flags & proto.HF_CSI_ON),
                         "csi_calibrating": bool(flags & proto.HF_CSI_CALIB),
                         "csi_noise": n.get("csi_noise"),
