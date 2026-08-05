@@ -1,6 +1,6 @@
 - [SPS firmware decisions](sps-firmware-decisions.md) — SEQ write-ahead nonce-safety scheme, no-wrap/rekey rule, exact dedupe pairs, single-shot heartbeats, host tests as contract gate.
 - [Dirt32 gateway decisions](dirt32-gateway-decisions.md) — bridge holds no keys, Pi daemon is stdlib-only Python, C↔Python vector tests are the compat contract, /gw/ not /api/ in preview.
-- [Heltec V4 Ve rail polarity](ve-rail-polarity.md) — GPIO36 VextCtrl is ACTIVE HIGH (V4.3.1 datasheet); inverted polarity = sensor on SPI-diode backfeed, browns out at analog-engine turn-on.
+- [Heltec V4 Ve rail polarity](ve-rail-polarity.md) — GPIO36 VextCtrl is ACTIVE LOW (bench-verified); datasheet "pull high" prose is about external-supply input. Trust bench over prose.
 - [Heltec V4 L76K GPS EN pin](gps-en-pin.md) — GPIO34 (VGNSS_Ctrl) is ACTIVE LOW per Meshtastic; EN=HIGH keeps the GPS unpowered (zero NMEA).
 - [Heltec V4 sensor SPI bus](v4-sensor-spi-bus.md) — GPIO9/10/11 are internal LoRa-only (no header pads); sensors use dedicated HSPI SCK=48/MISO=4/MOSI=45, ADS CS=46/DRDY=3.
 - [SX126x new-packet detection](sx126x-rx-polling.md) — never poll getPacketLength() for new packets (stays nonzero forever); DIO1 RX-done IRQ only, else "works exactly once".

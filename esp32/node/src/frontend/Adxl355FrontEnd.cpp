@@ -147,7 +147,11 @@ bool Adxl355FrontEnd::begin(uint16_t sample_rate_hz) {
      * pin is unused — and if the PMDZ's DRDY pad is shorted (solder bridge /
      * breadboard contact), its driver fighting the short at measurement
      * entry is exactly the observed latch-up-until-power-cycle. */
-    regWrite(REG_POWER_CTL, 0x04);          /* measure + DRDY_OFF */
+    /* 0x06 = TEMP_OFF | DRDY_OFF, measure. Every known-working example
+     * (ADI no-OS, gpvidal, plasmapper) enters measurement with the temp
+     * sensor DISABLED; we previously used 0x04 (temp on) — turning off the
+     * temp ADC removes one analog block from the turn-on load. */
+    regWrite(REG_POWER_CTL, 0x06);          /* measure, TEMP_OFF + DRDY_OFF */
     delay(20);
     if (!still("POWER_CTL=measure+DRDY_OFF (+20ms)")) return false;
     delay(200);
@@ -185,7 +189,7 @@ int Adxl355FrontEnd::armMotionWake(float threshold_g) {
     regWrite(REG_ACT_EN, 0x04);                       /* Z axis only */
     regWrite(REG_INT_MAP, 0x08);                      /* ACT -> INT1 */
     /* low-power measurement stays on so activity engine runs (DRDY_OFF) */
-    regWrite(REG_POWER_CTL, 0x04);
+    regWrite(REG_POWER_CTL, 0x06);  /* measure, TEMP_OFF+DRDY_OFF */
     return _int1;
 }
 
@@ -331,7 +335,7 @@ void Adxl355FrontEnd::measureEntryProbe(uint32_t countdown_s) {
         delay(1000);
     }
     Serial.println("[probe] >>> POWER_CTL = measure NOW <<<");
-    regWrite(REG_POWER_CTL, 0x04);
+    regWrite(REG_POWER_CTL, 0x06);  /* measure, TEMP_OFF+DRDY_OFF */
     for (int i = 0; i < 20; i++) {
         delay(500);
         uint8_t dd = reg(REG_DEVID_AD);
