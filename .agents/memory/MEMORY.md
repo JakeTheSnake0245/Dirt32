@@ -7,4 +7,5 @@
 - [SPI clamping GPIO38 (GNSS_RX)](spi-gpio38-conflict.md) — SPI.begin() without explicit pins drives GPIO38 LOW via FSPIWP; must use SPI.begin(9,11,10,-1).
 - [Clamped MISO vs dead chip](miso-clamp-lesson.md) — blind-write revive + pull-test = output-pin short, not dead chip; 2×6 Pmod headers short pairs 3/9 etc. on one breadboard row group.
 - [Orval + zod v3 integer pitfall](orval-zod-integer.md) — use `type: number` not `integer` in openapi.yaml; orval emits zod.int() which zod v3 lacks.
+- [CSI ping size gate](csi-frame-size-gate.md) — ESP-NOW v2 pings are 123B on-air (not <100B); bench-measure sig_len via rx-diag counters before gating; floor near-zero baselines, never mute.
 - [Heltec V4.3 GPS — manufacturer method only](uart2-gps.md) — Serial1, RX=38/TX=39, EN=34 HIGH, RESET=42 HIGH, no pulses/standby/Serial2; require >100 sustained bytes before any UART conclusion; watch for stale-flash false negatives.
