@@ -79,16 +79,25 @@ bool CsiSensor::begin(const NodeConfig &cfg) {
 
     WiFi.mode(WIFI_STA);              /* up, but never associates */
     esp_wifi_set_ps(WIFI_PS_NONE);    /* CSI RX needs the radio always on */
+    /* CRITICAL: an unassociated STA does not pass received frames to the
+     * CSI hook — without promiscuous RX the callback never fires and
+     * frames stays at 0 forever (bench-verified). Espressif's esp-csi
+     * examples enable promiscuous mode for exactly this reason. */
+    esp_wifi_set_promiscuous(true);
+    wifi_promiscuous_filter_t filt = {};
+    filt.filter_mask = WIFI_PROMIS_FILTER_MASK_DATA | WIFI_PROMIS_FILTER_MASK_MGMT;
+    esp_wifi_set_promiscuous_filter(&filt);
     esp_wifi_set_channel(cfg.csi_wifi_channel, WIFI_SECOND_CHAN_NONE);
 
-    /* CSI capture: legacy LTF only — one amplitude vector per frame,
-     * identical format for ESP-NOW pings and ambient 11b/g traffic. */
+    /* CSI capture: match esp-csi example config — all LTF sources on,
+     * merged, no channel filter. ESP-NOW pings arrive as legacy frames;
+     * ambient 11n traffic contributes HT-LTF vectors. */
     wifi_csi_config_t csi_cfg = {};
     csi_cfg.lltf_en = true;
-    csi_cfg.htltf_en = false;
-    csi_cfg.stbc_htltf2_en = false;
+    csi_cfg.htltf_en = true;
+    csi_cfg.stbc_htltf2_en = true;
     csi_cfg.ltf_merge_en = true;
-    csi_cfg.channel_filter_en = true;
+    csi_cfg.channel_filter_en = false;
     csi_cfg.manu_scale = false;
     s_instance = this;
     if (esp_wifi_set_csi_config(&csi_cfg) != ESP_OK) return false;
