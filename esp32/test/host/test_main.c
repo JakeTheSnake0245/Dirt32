@@ -83,8 +83,10 @@ static void test_serialization(void) {
 
     sps_heartbeat_t hb = { .timestamp = 1785400123u, .battery_mv = 3987,
                            .lat_e7 = 314159265, .lon_e7 = -1123456789,
-                           .health_flags = SPS_HF_SENSOR_OK | SPS_HF_GPS_FIX,
-                           .noise_floor = 87, .fw_version = 3, .reset_count = 2 };
+                           .health_flags = SPS_HF_SENSOR_OK | SPS_HF_GPS_FIX |
+                                           SPS_HF_CSI_ON,
+                           .noise_floor = 87, .fw_version = 3, .reset_count = 2,
+                           .csi_noise = 142 };
     uint8_t plh[SPS_HEARTBEAT_PLEN];
     sps_heartbeat_write(&hb, plh);
     sps_heartbeat_t hb2; sps_heartbeat_read(plh, &hb2);
@@ -93,6 +95,19 @@ static void test_serialization(void) {
           hb2.health_flags == hb.health_flags && hb2.noise_floor == hb.noise_floor &&
           hb2.fw_version == hb.fw_version && hb2.reset_count == hb.reset_count,
           "heartbeat payload roundtrip");
+    CHECK(hb2.csi_noise == hb.csi_noise, "heartbeat csi_noise roundtrip");
+    CHECK((hb2.health_flags & SPS_HF_CSI_ON) != 0, "CSI_ON flag survives roundtrip");
+    CHECK(sps_payload_len(SPS_MSG_HEARTBEAT) == 22, "heartbeat plen is 22 (csi field)");
+
+    /* WiFi-presence alert class roundtrips like any other class */
+    sps_alert_t wa = { .timestamp = 1785400200u, .event_class = SPS_EV_WIFI_PRESENCE,
+                       .confidence = 150, .peak_amp = 2750 /* metric 27.50 x100 */,
+                       .battery_mv = 4050 };
+    uint8_t plw[SPS_ALERT_PLEN];
+    sps_alert_write(&wa, plw);
+    sps_alert_t wa2; sps_alert_read(plw, &wa2);
+    CHECK(wa2.event_class == SPS_EV_WIFI_PRESENCE && wa2.peak_amp == wa.peak_amp,
+          "wifi-presence alert roundtrip");
 
     sps_ack_t k = { .ack_seq = 0xABCDEF, .status = SPS_ACK_DUP };
     uint8_t plk[SPS_ACK_PLEN];

@@ -27,6 +27,7 @@
 #include "radio/LoRaLink.h"
 #include "display/DebugScreen.h"
 #include "gps/GpsUart.h"
+#include "csi/CsiSensor.h"
 #include <time.h>
 #include <Preferences.h>
 
@@ -46,6 +47,10 @@ static FrontEnd *frontEnd = nullptr;
 static StaLta detector;
 static bool radioOk = false, sensorOk = false;
 static DebugScreen dbgScreen;
+#if SPS_CSI_ENABLE
+static CsiSensor csi;
+static bool csiOk = false;
+#endif
 
 /* ---------- SEQ management ----------
  * SEQ is the replay key and nonce base — it must NEVER repeat under the same
@@ -196,6 +201,11 @@ static uint32_t nowUnix(const GpsFix &fix) {
 
 /* ---------- TX paths ---------- */
 static void sendAlert(uint8_t event_class, uint8_t confidence, uint16_t peak) {
+#if SPS_CSI_ENABLE
+    /* Coexistence: hold our ESP-NOW pings while the LoRa alert burst +
+     * ACK window is in flight so both transmitters never key up together. */
+    csi.pauseTraffic(true);
+#endif
     sps_alert_t a = {
         .timestamp = nowUnix(GpsFix{}),
         .event_class = event_class,
@@ -205,15 +215,23 @@ static void sendAlert(uint8_t event_class, uint8_t confidence, uint16_t peak) {
     };
     uint8_t frame[SPS_MAX_FRAME];
     uint32_t seq = nextSeq();
-    if (seq == 0) return;   /* SEQ exhausted or NVS failure — never reuse a nonce */
-    int n = sps_seal_alert(cfg.psk, cfg.net_id, cfg.node_id, seq, &a,
-                           frame, sizeof(frame));
-    if (n <= 0) { Serial.printf("[alert] seal err %d\n", n); return; }
-    TxOutcome out = link_.sendReliable(frame, (size_t)n, seq);
-    Serial.printf("[alert] seq=%lu class=%u conf=%u peak=%u -> %s\n",
-                  (unsigned long)seq, event_class, confidence, peak,
-                  out == TxOutcome::ACKED ? "ACKED" :
-                  out == TxOutcome::SENT_NO_ACK ? "sent (no ack)" : "RADIO ERROR");
+    if (seq == 0) goto out;   /* SEQ exhausted or NVS failure — never reuse a nonce */
+    {
+        int n = sps_seal_alert(cfg.psk, cfg.net_id, cfg.node_id, seq, &a,
+                               frame, sizeof(frame));
+        if (n <= 0) { Serial.printf("[alert] seal err %d\n", n); goto out; }
+        TxOutcome outc = link_.sendReliable(frame, (size_t)n, seq);
+        Serial.printf("[alert] seq=%lu class=%u conf=%u peak=%u -> %s\n",
+                      (unsigned long)seq, event_class, confidence, peak,
+                      outc == TxOutcome::ACKED ? "ACKED" :
+                      outc == TxOutcome::SENT_NO_ACK ? "sent (no ack)" : "RADIO ERROR");
+    }
+out:
+#if SPS_CSI_ENABLE
+    csi.pauseTraffic(false);
+#else
+    ;
+#endif
 }
 
 static void sendHeartbeat(bool deployFlag = false) {
@@ -232,6 +250,13 @@ static void sendHeartbeat(bool deployFlag = false) {
     hb.noise_floor = detector.noiseFloor();
     hb.fw_version = SPS_FW_VERSION;
     hb.reset_count = rtc_reset_count;
+#if SPS_CSI_ENABLE
+    if (csiOk && csi.running()) {
+        hb.health_flags |= SPS_HF_CSI_ON;
+        if (csi.calibrating()) hb.health_flags |= SPS_HF_CSI_CALIB;
+        hb.csi_noise = csi.noiseX100();
+    }
+#endif
 
     uint8_t frame[SPS_MAX_FRAME];
     uint32_t seq = nextSeq();
@@ -300,6 +325,7 @@ static void printHelp() {
         "  taptest [class]      send a synthetic ALERT (default class=footstep)\n"
         "  hb                   send a heartbeat now\n"
         "  detector <seconds>   stream STA/LTA ratio for tuning\n"
+        "  csi [seconds]        WiFi-radar status; with seconds, stream the CSI metric for tuning\n"
         "  selftest             run front-end self test\n"
         "  seqreset             reset SEQ to 0 (ONLY after PSK rotation)\n"
         "  screen               show link-config page on the OLED\n"
@@ -362,6 +388,39 @@ static void handleCli(String line) {
             }
             if (n == 0) delay(2);
         }
+    }
+    else if (cmd == "csi") {
+#if SPS_CSI_ENABLE
+        if (!cfg.csi_enable) {
+            Serial.println("[csi] disabled — `set csi_enable 1` then `save` + `reboot`");
+            return;
+        }
+        if (!csiOk) { Serial.println("[csi] init failed at boot"); return; }
+        Serial.printf("[csi] running=%d calibrating=%d frames=%lu noise=%u (x100) "
+                      "threshold=%.1f\n",
+                      (int)csi.running(), (int)csi.calibrating(),
+                      (unsigned long)csi.frameCount(), csi.noiseX100(),
+                      cfg.csi_threshold);
+        uint32_t secs = rest.isEmpty() ? 0 : (uint32_t)rest.toInt();
+        if (secs > 0) {
+            Serial.printf("[csi] streaming metric for %lus (trigger at %.1f)\n",
+                          (unsigned long)secs, cfg.csi_threshold);
+            uint32_t t0 = millis(), lastPrint = 0;
+            while (millis() - t0 < secs * 1000) {
+                csi.service();
+                csi.poll();
+                if (millis() - lastPrint > 250) {
+                    Serial.printf("metric=%.2f frames=%lu%s\n", csi.metric(),
+                                  (unsigned long)csi.frameCount(),
+                                  csi.calibrating() ? " (calibrating)" : "");
+                    lastPrint = millis();
+                }
+                delay(5);
+            }
+        }
+#else
+        Serial.println("[csi] not in this build (SPS_CSI_ENABLE=0)");
+#endif
     }
     else if (cmd == "adxlprobe") {
         uint32_t secs = rest.length() ? (uint32_t)rest.toInt() : 15;
@@ -748,6 +807,25 @@ void setup() {
     }
     if (cfg.front_end == FE_GEOPHONE)
         Serial.println("Geophone profile: continuous detection running.");
+
+#if SPS_CSI_ENABLE
+    /* WiFi radar (CSI): only in continuous-listen operation — the WiFi
+     * radio must stay in RX, so CSI is incompatible with the deep-sleep
+     * ADXL profile (auto-arm is suppressed below when CSI is on). */
+    if (cfg.csi_enable) {
+        Serial.println("[csi] WiFi radar init (STA, not associated)...");
+        csiOk = csi.begin(cfg);
+        if (csiOk)
+            Serial.printf("[csi] up: ch=%u role=%s ping=%uHz thresh=%.1f "
+                          "window=%u calib=%us — node stays awake while CSI is on\n",
+                          cfg.csi_wifi_channel,
+                          cfg.csi_role == 0 ? "rx" : cfg.csi_role == 1 ? "tx" : "both",
+                          cfg.csi_ping_hz, cfg.csi_threshold,
+                          cfg.csi_window_frames, cfg.csi_calib_s);
+        else
+            Serial.println("[csi] init FAILED — WiFi/ESP-NOW error; seismic path unaffected");
+    }
+#endif
 }
 
 void loop() {
@@ -792,8 +870,13 @@ void loop() {
 
     /* Deploy-and-forget: on a cold boot with healthy sensor+radio and an
      * untouched CLI, arm automatically after cfg.auto_arm_s seconds. Any
-     * keystroke or button press cancels for this session. */
-    if (!autoArmCancelled && armAtMs > 0 && sensorOk && radioOk &&
+     * keystroke or button press cancels for this session.
+     * CSI mode suppresses auto-arm: WiFi radar needs the radio awake. */
+    bool csiHoldsAwake = false;
+#if SPS_CSI_ENABLE
+    csiHoldsAwake = cfg.csi_enable && csiOk;
+#endif
+    if (!autoArmCancelled && !csiHoldsAwake && armAtMs > 0 && sensorOk && radioOk &&
         cfg.front_end == FE_ADXL355) {
         static uint32_t lastCountdown = 0;
         uint32_t left = (millis() < armAtMs) ? armAtMs - millis() : 0;
@@ -857,5 +940,25 @@ void loop() {
             if (r.triggered) sendAlert(r.event_class, r.confidence, r.peak_amp);
         }
     }
+
+#if SPS_CSI_ENABLE
+    /* WiFi radar: ping traffic + detector. Coexists with seismic detection
+     * above — a person can raise both a seismic and a wifi_presence alert. */
+    if (csiOk) {
+        csi.service();
+        static bool wasCalib = true;
+        bool calib = csi.calibrating();
+        if (wasCalib && !calib)
+            Serial.printf("[csi] calibration done — baseline noise=%u (x100)\n",
+                          csi.noiseX100());
+        wasCalib = calib;
+        CsiEvent e = csi.poll();
+        if (e.triggered) {
+            Serial.printf("[csi] MOTION metric=%.2f conf=%u\n",
+                          e.metric_x100 / 100.0f, e.confidence);
+            sendAlert(SPS_EV_WIFI_PRESENCE, e.confidence, e.metric_x100);
+        }
+    }
+#endif
     delay(1);
 }

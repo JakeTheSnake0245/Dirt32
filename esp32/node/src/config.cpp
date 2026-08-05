@@ -69,6 +69,14 @@ void configLoad(NodeConfig &cfg) {
         cfg.fallback_lat_e7 = (int32_t)(doc["fallback_lat"].as<float>() * 1e7f);
     if (doc["fallback_lon"].is<float>() || doc["fallback_lon"].is<int>())
         cfg.fallback_lon_e7 = (int32_t)(doc["fallback_lon"].as<float>() * 1e7f);
+    cfg.csi_enable = doc["csi_enable"] | cfg.csi_enable;
+    cfg.csi_role = doc["csi_role"] | cfg.csi_role;
+    cfg.csi_wifi_channel = doc["csi_wifi_channel"] | cfg.csi_wifi_channel;
+    cfg.csi_ping_hz = doc["csi_ping_hz"] | cfg.csi_ping_hz;
+    cfg.csi_threshold = doc["csi_threshold"] | cfg.csi_threshold;
+    cfg.csi_window_frames = doc["csi_window_frames"] | cfg.csi_window_frames;
+    cfg.csi_calib_s = doc["csi_calib_s"] | cfg.csi_calib_s;
+    cfg.csi_holdoff_s = doc["csi_holdoff_s"] | cfg.csi_holdoff_s;
 }
 
 static void toJson(const NodeConfig &cfg, JsonDocument &doc, bool includePsk) {
@@ -112,6 +120,14 @@ static void toJson(const NodeConfig &cfg, JsonDocument &doc, bool includePsk) {
     doc["gps_fix_timeout_s"] = cfg.gps_fix_timeout_s;
     doc["fallback_lat"] = cfg.fallback_lat_e7 / 1e7f;
     doc["fallback_lon"] = cfg.fallback_lon_e7 / 1e7f;
+    doc["csi_enable"] = cfg.csi_enable;
+    doc["csi_role"] = cfg.csi_role;
+    doc["csi_wifi_channel"] = cfg.csi_wifi_channel;
+    doc["csi_ping_hz"] = cfg.csi_ping_hz;
+    doc["csi_threshold"] = cfg.csi_threshold;
+    doc["csi_window_frames"] = cfg.csi_window_frames;
+    doc["csi_calib_s"] = cfg.csi_calib_s;
+    doc["csi_holdoff_s"] = cfg.csi_holdoff_s;
 }
 
 bool configSave(const NodeConfig &cfg) {
@@ -192,5 +208,18 @@ bool configSet(NodeConfig &cfg, const String &key, const String &value) {
         if (v < -180.0f || v > 180.0f) return false; /* invalid longitude */
         cfg.fallback_lon_e7 = (int32_t)(v * 1e7f); return true;
     }
+    if (key == "csi_enable") { cfg.csi_enable = value.toInt() != 0; return true; }
+    if (key == "csi_role") {
+        if (value == "rx" || value == "0") { cfg.csi_role = 0; return true; }
+        if (value == "tx" || value == "1") { cfg.csi_role = 1; return true; }
+        if (value == "both" || value == "2") { cfg.csi_role = 2; return true; }
+        return false;
+    }
+    if (key == "csi_wifi_channel") { int v = value.toInt(); if (v < 1 || v > 13) return false; cfg.csi_wifi_channel = v; return true; }
+    if (key == "csi_ping_hz") { int v = value.toInt(); if (v < 1 || v > 100) return false; cfg.csi_ping_hz = v; return true; }
+    if (key == "csi_threshold") { float v = value.toFloat(); if (v < 1.1f) return false; cfg.csi_threshold = v; return true; }
+    if (key == "csi_window_frames") { int v = value.toInt(); if (v < 8 || v > 128) return false; cfg.csi_window_frames = v; return true; }
+    if (key == "csi_calib_s") { int v = value.toInt(); if (v < 5 || v > 600) return false; cfg.csi_calib_s = v; return true; }
+    if (key == "csi_holdoff_s") { int v = value.toInt(); if (v < 0 || v > 600) return false; cfg.csi_holdoff_s = v; return true; }
     return false;
 }

@@ -38,9 +38,21 @@ class CrossVector(unittest.TestCase):
         self.assertEqual(hdr.seq, 0x000A0C)
         self.assertEqual((hb.timestamp, hb.battery_mv, hb.lat_e7, hb.lon_e7,
                           hb.health_flags, hb.noise_floor, hb.fw_version,
-                          hb.reset_count),
+                          hb.reset_count, hb.csi_noise),
                          (1785400100, 3702, 407128000, -740060000,
-                          proto.HF_SENSOR_OK | proto.HF_GPS_FIX, 55, 1, 2))
+                          proto.HF_SENSOR_OK | proto.HF_GPS_FIX | proto.HF_CSI_ON,
+                          55, 1, 2, 123))
+
+    def test_wifi_alert_from_c(self):
+        """WiFi radar (CSI) presence alert — event class 4, C-sealed."""
+        hdr, pt = proto.open_frame(KEY, VECTORS["wifi_alert"])
+        a = proto.Alert.unpack(pt)
+        self.assertEqual(hdr.seq, 0x000A0D)
+        self.assertEqual((a.timestamp, a.event_class, a.confidence,
+                          a.peak_amp, a.battery_mv),
+                         (1785400150, proto.EV_WIFI_PRESENCE, 142, 2750, 3950))
+        self.assertEqual(proto.EV_NAMES[a.event_class], "wifi_presence")
+        self.assertEqual(proto.EV_CHANNEL[a.event_class], "rf")
 
     def test_ack_from_c(self):
         hdr, pt = proto.open_frame(KEY, VECTORS["ack"])

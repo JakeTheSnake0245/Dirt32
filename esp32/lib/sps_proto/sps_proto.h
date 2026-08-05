@@ -46,17 +46,21 @@ extern "C" {
 #define SPS_MSG_ACK          0x03u
 
 #define SPS_ALERT_PLEN       10u  /* TIMESTAMP4 CLASS1 CONF1 PEAK2 BATT2 */
-#define SPS_HEARTBEAT_PLEN   20u  /* TS4 BATT2 LAT4 LON4 FLAGS1 NOISE2 FW1 RST2 */
+#define SPS_HEARTBEAT_PLEN   22u  /* TS4 BATT2 LAT4 LON4 FLAGS1 NOISE2 FW1 RST2 CSI2 */
 #define SPS_ACK_PLEN         4u   /* ACK_SEQ3 STATUS1 */
 
 #define SPS_MAX_PLEN         SPS_HEARTBEAT_PLEN
 #define SPS_MAX_FRAME        (SPS_HDR_LEN + SPS_MAX_PLEN + SPS_TAG_LEN)
 
 /* Event classes */
-#define SPS_EV_UNKNOWN   0u
-#define SPS_EV_FOOTSTEP  1u
-#define SPS_EV_VEHICLE   2u
-#define SPS_EV_MULTIPLE  3u
+#define SPS_EV_UNKNOWN        0u
+#define SPS_EV_FOOTSTEP       1u
+#define SPS_EV_VEHICLE        2u
+#define SPS_EV_MULTIPLE       3u
+/* WiFi radar (CSI) presence detection — RF channel, not seismic.
+ * peak_amp carries the CSI motion metric x100 (moving variance over the
+ * calibrated baseline); confidence is metric/threshold scaled as usual. */
+#define SPS_EV_WIFI_PRESENCE  4u
 
 /* Health flags (heartbeat) */
 #define SPS_HF_SENSOR_OK   (1u << 0)
@@ -65,6 +69,8 @@ extern "C" {
 #define SPS_HF_TAMPER      (1u << 3)
 #define SPS_HF_ON_SOLAR    (1u << 4)
 #define SPS_HF_DEPLOY      (1u << 5)   /* node just placed in field (button-triggered) */
+#define SPS_HF_CSI_ON      (1u << 6)   /* WiFi radar (CSI) sensing active */
+#define SPS_HF_CSI_CALIB   (1u << 7)   /* CSI detector still calibrating baseline */
 
 /* ACK status */
 #define SPS_ACK_OK         0u
@@ -113,6 +119,7 @@ typedef struct {
     uint16_t noise_floor;
     uint8_t  fw_version;
     uint16_t reset_count;
+    uint16_t csi_noise;    /* CSI quiescent noise metric x100; 0 = CSI off */
 } sps_heartbeat_t;
 
 typedef struct {

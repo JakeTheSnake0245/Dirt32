@@ -64,6 +64,19 @@ struct NodeConfig {
     /* Fallback position (used when no GPS fix; provisioning record §11) */
     int32_t  fallback_lat_e7 = 0;
     int32_t  fallback_lon_e7 = 0;
+
+    /* WiFi radar (CSI) sensing — compile-time gate SPS_CSI_ENABLE, runtime
+       gate csi_enable. Keeps the WiFi radio in RX continuously, so the node
+       stays in continuous-listen mode (no deep sleep) while enabled: only
+       for mains/solar deployments. Disabled by default. */
+    bool     csi_enable      = false;
+    uint8_t  csi_role        = 2;      /* 0=rx-only 1=tx-only 2=both */
+    uint8_t  csi_wifi_channel = 1;     /* 1..13; all sensing nodes must match */
+    uint8_t  csi_ping_hz     = 10;     /* ESP-NOW ping rate (traffic source) */
+    float    csi_threshold   = 2.0f;   /* trigger at metric >= threshold */
+    uint16_t csi_window_frames = 64;   /* moving-variance window (8..128) */
+    uint16_t csi_calib_s     = 30;     /* baseline calibration (keep area clear) */
+    uint16_t csi_holdoff_s   = 5;      /* min quiet time between events */
 };
 
 /* Load from NVS; returns defaults for anything unset. */

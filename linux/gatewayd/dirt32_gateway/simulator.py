@@ -36,6 +36,11 @@ class Simulator:
         self.quiet_node = nodes[-1] if len(nodes) > 2 else None
         self.low_batt_node = nodes[1] if len(nodes) > 1 else None
         self.tamper_node = nodes[2] if len(nodes) > 3 else None
+        # WiFi radar (CSI): roughly half the fleet runs CSI sensing; one of
+        # them is still calibrating its baseline.
+        self.csi_nodes = set(nodes[::2])
+        self.csi_calib_node = nodes[0] if nodes else None
+        self.csi_calib_until = time.time() + 90
 
     def _next_seq(self, n):
         self.seq[n] += 1
@@ -46,20 +51,34 @@ class Simulator:
         flags = proto.HF_SENSOR_OK | proto.HF_SELFTEST | proto.HF_GPS_FIX
         if n == self.tamper_node:
             flags |= proto.HF_TAMPER
+        csi_noise = 0
+        if n in self.csi_nodes:
+            flags |= proto.HF_CSI_ON
+            if n == self.csi_calib_node and time.time() < self.csi_calib_until:
+                flags |= proto.HF_CSI_CALIB
+            csi_noise = random.randint(80, 160)   # quiescent metric x100
         lat, lon = self.pos[n]
         hb = proto.Heartbeat(int(time.time()), batt,
                              lat + random.randint(-50, 50),
                              lon + random.randint(-50, 50),
-                             flags, random.randint(30, 90), 1, 0)
+                             flags, random.randint(30, 90), 1, 0, csi_noise)
         hdr = proto.Header(self.net_id, proto.MSG_HEARTBEAT, n, self._next_seq(n))
         frame = proto.seal(self.keys[n], hdr, hb.pack())
         self.ingest.handle_frame(frame, rssi=random.uniform(-120, -70),
                                  snr=random.uniform(-5, 10))
 
     def _alert(self, n):
-        ev = random.choice([1, 1, 2])   # footsteps twice as likely as vehicles
-        a = proto.Alert(int(time.time()), ev, random.randint(80, 250),
-                        random.randint(500, 9000), random.randint(3700, 4100))
+        choices = [1, 1, 2]   # footsteps twice as likely as vehicles
+        if n in self.csi_nodes:
+            choices += [proto.EV_WIFI_PRESENCE, proto.EV_WIFI_PRESENCE]
+        ev = random.choice(choices)
+        if ev == proto.EV_WIFI_PRESENCE:
+            # peak_amp carries the CSI motion metric x100
+            a = proto.Alert(int(time.time()), ev, random.randint(100, 250),
+                            random.randint(250, 1200), random.randint(3700, 4100))
+        else:
+            a = proto.Alert(int(time.time()), ev, random.randint(80, 250),
+                            random.randint(500, 9000), random.randint(3700, 4100))
         hdr = proto.Header(self.net_id, proto.MSG_ALERT, n, self._next_seq(n))
         frame = proto.seal(self.keys[n], hdr, a.pack())
         self.ingest.handle_frame(frame, rssi=random.uniform(-115, -75),

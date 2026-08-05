@@ -22,7 +22,8 @@ CREATE TABLE IF NOT EXISTS nodes (
     snr         REAL,
     hb_lat_e7   INTEGER,            -- last reported position
     hb_lon_e7   INTEGER,
-    replay_state TEXT               -- persisted ReplayWindow json
+    replay_state TEXT,              -- persisted ReplayWindow json
+    csi_noise   INTEGER             -- WiFi radar quiescent noise x100 (0/NULL = CSI off)
 );
 CREATE TABLE IF NOT EXISTS alerts (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -49,7 +50,8 @@ CREATE TABLE IF NOT EXISTS heartbeats (
     health_flags INTEGER,
     noise_floor INTEGER,
     rssi        REAL,
-    snr         REAL
+    snr         REAL,
+    csi_noise   INTEGER             -- WiFi radar quiescent noise x100
 );
 CREATE TABLE IF NOT EXISTS raw_frames (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -71,6 +73,15 @@ class Db:
         self._conn.row_factory = sqlite3.Row
         self._conn.executescript(SCHEMA)
         self._conn.commit()
+        # Migration for pre-CSI databases: CREATE TABLE IF NOT EXISTS does
+        # not add columns to an existing table.
+        for table in ("nodes", "heartbeats"):
+            try:
+                self._conn.execute(
+                    f"ALTER TABLE {table} ADD COLUMN csi_noise INTEGER")
+                self._conn.commit()
+            except sqlite3.OperationalError:
+                pass  # column already present
 
     def _exec(self, sql, args=()):
         with self._lock:
@@ -115,18 +126,20 @@ class Db:
         return now
 
     def add_heartbeat(self, node_id, seq, node_time, battery_mv, lat_e7, lon_e7,
-                      health_flags, noise_floor, fw_version, reset_count, rssi, snr):
+                      health_flags, noise_floor, fw_version, reset_count, rssi, snr,
+                      csi_noise=0):
         now = time.time()
         self._exec(
             "INSERT INTO heartbeats (node_id, seq, received_at, node_time, battery_mv,"
-            " lat_e7, lon_e7, health_flags, noise_floor, rssi, snr)"
-            " VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            " lat_e7, lon_e7, health_flags, noise_floor, rssi, snr, csi_noise)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
             (node_id, seq, now, node_time, battery_mv, lat_e7, lon_e7,
-             health_flags, noise_floor, rssi, snr))
+             health_flags, noise_floor, rssi, snr, csi_noise))
         self.upsert_node(node_id, last_seen=now, last_hb=now, battery_mv=battery_mv,
                          health_flags=health_flags, noise_floor=noise_floor,
                          fw_version=fw_version, reset_count=reset_count,
-                         rssi=rssi, snr=snr, hb_lat_e7=lat_e7, hb_lon_e7=lon_e7)
+                         rssi=rssi, snr=snr, hb_lat_e7=lat_e7, hb_lon_e7=lon_e7,
+                         csi_noise=csi_noise)
         return now
 
     def add_raw(self, frame_hex, rssi, snr, verdict):

@@ -5,7 +5,8 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { GatewayAlert } from './gatewayAlert';
 
-export interface HealthStatus {
-  status: string;
+export interface GatewayAlertList {
+  alerts: GatewayAlert[];
 }

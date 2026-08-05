@@ -6,8 +6,11 @@ dependency-free means the daemon runs on a stock Ubuntu Python while
 mosquitto handles fan-out, retained messages, and auth for subscribers.
 
 Topics:
-  dirt32/alert/<node_id>       one message per verified alert (JSON)
-  dirt32/heartbeat/<node_id>   one per verified heartbeat (JSON)
+  dirt32/alert/<node_id>       one message per verified alert (JSON; includes
+                               "event" and "channel" — seismic classes and
+                               WiFi-radar "wifi_presence"/"rf" share the topic)
+  dirt32/heartbeat/<node_id>   one per verified heartbeat (JSON; includes
+                               csi_on/csi_noise WiFi-radar health)
   dirt32/status/<node_id>      retained: current color + reasons (JSON)
   dirt32/gateway/state         retained: online/offline (LWT)
 """

@@ -24,11 +24,15 @@ MSG_HEARTBEAT = 0x02
 MSG_ACK = 0x03
 
 ALERT_PLEN = 10
-HEARTBEAT_PLEN = 20
+HEARTBEAT_PLEN = 22
 ACK_PLEN = 4
 PAYLOAD_LEN = {MSG_ALERT: ALERT_PLEN, MSG_HEARTBEAT: HEARTBEAT_PLEN, MSG_ACK: ACK_PLEN}
 
-EV_NAMES = {0: "unknown", 1: "footstep", 2: "vehicle", 3: "multiple"}
+EV_NAMES = {0: "unknown", 1: "footstep", 2: "vehicle", 3: "multiple",
+            4: "wifi_presence"}
+EV_WIFI_PRESENCE = 4
+# Sensing channel per event class: seismic (ground coupling) vs rf (WiFi CSI).
+EV_CHANNEL = {0: "seismic", 1: "seismic", 2: "seismic", 3: "seismic", 4: "rf"}
 
 HF_SENSOR_OK = 1 << 0
 HF_GPS_FIX   = 1 << 1
@@ -36,6 +40,8 @@ HF_SELFTEST  = 1 << 2
 HF_TAMPER    = 1 << 3
 HF_ON_SOLAR  = 1 << 4
 HF_DEPLOY    = 1 << 5   # node just placed in field (button-triggered heartbeat)
+HF_CSI_ON    = 1 << 6   # WiFi radar (CSI) sensing active
+HF_CSI_CALIB = 1 << 7   # CSI detector still calibrating its baseline
 
 ACK_OK = 0
 ACK_DUP = 1
@@ -187,15 +193,17 @@ class Heartbeat:
     noise_floor: int
     fw_version: int
     reset_count: int
+    csi_noise: int = 0    # CSI quiescent noise metric x100; 0 = CSI off
 
     def pack(self) -> bytes:
-        return struct.pack("<IHiiBHBH", self.timestamp, self.battery_mv,
+        return struct.pack("<IHiiBHBHH", self.timestamp, self.battery_mv,
                            self.lat_e7, self.lon_e7, self.health_flags,
-                           self.noise_floor, self.fw_version, self.reset_count)
+                           self.noise_floor, self.fw_version, self.reset_count,
+                           self.csi_noise)
 
     @staticmethod
     def unpack(b: bytes) -> "Heartbeat":
-        return Heartbeat(*struct.unpack("<IHiiBHBH", b[:HEARTBEAT_PLEN]))
+        return Heartbeat(*struct.unpack("<IHiiBHBHH", b[:HEARTBEAT_PLEN]))
 
 
 @dataclass

@@ -142,9 +142,10 @@ class Ingest:
                                      a.battery_mv, rssi, snr)
         ev = {"node_id": hdr.node_id, "seq": hdr.seq, "received_at": received,
               "event": proto.EV_NAMES.get(a.event_class, "?"),
+              "channel": proto.EV_CHANNEL.get(a.event_class, "seismic"),
               "confidence": a.confidence, "peak_amp": a.peak_amp,
               "battery_mv": a.battery_mv, "rssi": rssi, "snr": snr}
-        self.log(f"[alert] node={hdr.node_id} {ev['event']} "
+        self.log(f"[alert] node={hdr.node_id} {ev['event']} ({ev['channel']}) "
                  f"conf={a.confidence} rssi={rssi}")
         if self.mqtt:
             self.mqtt.publish(f"dirt32/alert/{hdr.node_id}", ev)
@@ -155,11 +156,13 @@ class Ingest:
         received = self.db.add_heartbeat(
             hdr.node_id, hdr.seq, hb.timestamp, hb.battery_mv, hb.lat_e7,
             hb.lon_e7, hb.health_flags, hb.noise_floor, hb.fw_version,
-            hb.reset_count, rssi, snr)
+            hb.reset_count, rssi, snr, hb.csi_noise)
         ev = {"node_id": hdr.node_id, "seq": hdr.seq, "received_at": received,
               "battery_mv": hb.battery_mv, "lat_e7": hb.lat_e7,
               "lon_e7": hb.lon_e7, "health_flags": hb.health_flags,
-              "noise_floor": hb.noise_floor, "rssi": rssi, "snr": snr}
+              "noise_floor": hb.noise_floor, "csi_noise": hb.csi_noise,
+              "csi_on": bool(hb.health_flags & proto.HF_CSI_ON),
+              "rssi": rssi, "snr": snr}
         deploy = bool(hb.health_flags & proto.HF_DEPLOY)
         gps_fix = bool(hb.health_flags & proto.HF_GPS_FIX)
         pos = (f" lat={hb.lat_e7/1e7:.5f} lon={hb.lon_e7/1e7:.5f}"

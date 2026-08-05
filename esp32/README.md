@@ -398,6 +398,64 @@ usual damping resistor across the coil per the SM-24 datasheet, ~1 kΩ).
   disables it entirely. So in the field: power it up, walk away, and two
   minutes later it's a trip sensor.
 
+## WiFi radar (CSI) sensing
+
+A second, RF-based sensing channel alongside the seismic front end
+(modeled on espressif/esp-csi and espectre). The ESP32-S3's WiFi radio
+captures Channel State Information from every frame it decodes; a person
+moving near the TX→RX path perturbs the per-subcarrier amplitudes, and an
+on-device detector turns that into `wifi_presence` alerts over the normal
+encrypted LoRa path. It sees people through walls and vegetation where
+ground coupling is poor, and both channels can fire on one node — a
+correlated seismic + wifi_presence pair is a strong detection.
+
+**Build & runtime gates.** `-DSPS_CSI_ENABLE=1` in `platformio.ini`
+compiles the module in (set to 0 to strip WiFi entirely for deep-sleep
+deployments); `set csi_enable 1` + `save` + `reboot` turns it on. CSI
+keeps the WiFi radio in RX continuously, so an enabled node **stays in
+continuous-listen mode and never deep sleeps** (auto-arm is suppressed) —
+treat it like the geophone profile: mains/solar power only.
+
+**Traffic source.** CSI measures received frames, so something must
+transmit. Each node sends tiny ESP-NOW broadcast pings (`csi_ping_hz`,
+default 10 Hz, ~8-byte payload ≈ well under 0.5 % duty cycle); any pair
+of nodes on the same `csi_wifi_channel` forms a TX→RX sensing link with
+no router around. Roles: `set csi_role rx|tx|both` (default both).
+Ambient AP/router traffic on the configured channel is captured too — in
+a home/urban deployment an `rx`-only node can ride on router beacons
+(~10 Hz on their own) with zero TX power spent.
+
+**Detector (espectre-style).** Per frame: spatial turbulence =
+std/mean of mid-subcarrier amplitudes (scale-free, cancels AGC/RSSI).
+Then a moving variance over `csi_window_frames` (default 64), divided by
+a baseline learned during `csi_calib_s` (default 30 s — keep the area
+clear after boot). Trigger at metric ≥ `csi_threshold` (default 2.0),
+release at 0.5×, then `csi_holdoff_s` (default 5 s) of hold-off, so a
+passing person yields one clean event. Heartbeats report the quiescent
+baseline (×100) plus CSI-on/calibrating health flags, so the gateway can
+watch the RF noise floor per node.
+
+**Tuning.** `csi` on the CLI prints status; `csi 30` streams the live
+metric for 30 s — walk the perimeter and pick a threshold ~2× the largest
+quiet-time metric you see. Raise `csi_window_frames` for fewer false
+positives (slower response), raise `csi_ping_hz` for faster response
+(more power). If two CSI nodes are in radio range, put them on the same
+channel and let one be `tx`/`both` — the *link between them* is the
+sensitive zone.
+
+**Coexistence & power.** LoRa (SX1262, SPI) and WiFi are separate radios
+on this board, so there's no shared-RF arbitration; the firmware still
+pauses ESP-NOW pings while an alert burst + ACK window is in flight so
+the two transmitters never key up together (peak-current precaution on
+battery). Expected cost: WiFi RX-always-on adds roughly 80–100 mA
+continuous (vs ~40 mA continuous-listen without CSI, vs ~20 µA armed
+deep sleep) — bench-verify on real hardware and record actuals here.
+
+**Config keys** (all `set`-able, see `help`): `csi_enable`, `csi_role`,
+`csi_wifi_channel` (1–13, must match across sensing nodes), `csi_ping_hz`
+(1–100), `csi_threshold` (>1.1), `csi_window_frames` (8–128),
+`csi_calib_s` (5–600), `csi_holdoff_s` (0–600).
+
 ## Security model (spec §4.2, §10)
 
 - Per-node 256-bit PSK; ChaCha20-Poly1305 with the 8-byte header as AAD.

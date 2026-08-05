@@ -29,10 +29,18 @@ int main(void) {
 
     sps_heartbeat_t hb = { .timestamp = 1785400100, .battery_mv = 3702,
                            .lat_e7 = 407128000, .lon_e7 = -740060000,
-                           .health_flags = SPS_HF_SENSOR_OK | SPS_HF_GPS_FIX,
-                           .noise_floor = 55, .fw_version = 1, .reset_count = 2 };
+                           .health_flags = SPS_HF_SENSOR_OK | SPS_HF_GPS_FIX |
+                                           SPS_HF_CSI_ON,
+                           .noise_floor = 55, .fw_version = 1, .reset_count = 2,
+                           .csi_noise = 123 };
     n = sps_seal_heartbeat(key, 7, 0x0102, 0x000A0C, &hb, frame, sizeof(frame));
     hexdump("heartbeat", frame, n);
+
+    /* WiFi radar (CSI) presence alert — new event class 4 */
+    sps_alert_t wa = { .timestamp = 1785400150, .event_class = SPS_EV_WIFI_PRESENCE,
+                       .confidence = 142, .peak_amp = 2750, .battery_mv = 3950 };
+    n = sps_seal_alert(key, 7, 0x0102, 0x000A0D, &wa, frame, sizeof(frame));
+    hexdump("wifi_alert", frame, n);
 
     sps_ack_t ack = { .ack_seq = 0x000A0B, .status = SPS_ACK_OK };
     n = sps_seal_ack(key, 7, 0x0102, 0x000A0B, &ack, frame, sizeof(frame));

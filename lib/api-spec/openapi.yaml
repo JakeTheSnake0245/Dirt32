@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: gateway
+    description: Dirt32 gateway data (nodes, alerts) proxied from the gateway daemon
 paths:
   /healthz:
     get:
@@ -24,6 +26,63 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /gateway/nodes:
+    get:
+      operationId: listGatewayNodes
+      tags: [gateway]
+      summary: List perimeter nodes
+      description: >-
+        All nodes with computed status and per-node sensing health, including
+        WiFi radar (CSI) status (enabled, calibrating, quiescent noise metric).
+      responses:
+        "200":
+          description: Node list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GatewayNodeList"
+        "502":
+          description: Gateway daemon unreachable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GatewayError"
+  /gateway/alerts:
+    get:
+      operationId: listGatewayAlerts
+      tags: [gateway]
+      summary: List recent alerts
+      description: >-
+        Recent alerts across all nodes. `eventClass` distinguishes seismic
+        detections (footstep, vehicle, multiple) from WiFi radar detections
+        (wifi_presence); `channel` groups them as seismic vs rf.
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: number
+            minimum: 1
+            maximum: 500
+        - name: eventClass
+          in: query
+          required: false
+          description: Filter to one event class
+          schema:
+            $ref: "#/components/schemas/EventClass"
+      responses:
+        "200":
+          description: Alert list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GatewayAlertList"
+        "502":
+          description: Gateway daemon unreachable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GatewayError"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +92,90 @@ components:
           type: string
       required:
         - status
-
+    EventClass:
+      type: string
+      description: >-
+        Detection event class. Seismic classes come from the STA/LTA detector;
+        wifi_presence comes from the WiFi radar (CSI) motion detector.
+      enum: [unknown, footstep, vehicle, multiple, wifi_presence]
+    SensingChannel:
+      type: string
+      description: Which physical sensing channel produced the event.
+      enum: [seismic, rf]
+    GatewayNode:
+      type: object
+      properties:
+        nodeId:
+          type: number
+        name:
+          type: [string, "null"]
+        color:
+          type: string
+          enum: [green, yellow, red]
+        reasons:
+          type: array
+          items:
+            type: string
+        lat:
+          type: [number, "null"]
+        lon:
+          type: [number, "null"]
+        lastSeen:
+          type: [number, "null"]
+        batteryMv:
+          type: [number, "null"]
+        noiseFloor:
+          type: [number, "null"]
+        csiOn:
+          type: boolean
+          description: WiFi radar (CSI) sensing active on this node
+        csiCalibrating:
+          type: boolean
+          description: CSI detector still calibrating its baseline
+        csiNoise:
+          type: [number, "null"]
+          description: CSI quiescent noise metric (baseline moving variance)
+      required: [nodeId, color, reasons, csiOn, csiCalibrating]
+    GatewayNodeList:
+      type: object
+      properties:
+        nodes:
+          type: array
+          items:
+            $ref: "#/components/schemas/GatewayNode"
+      required: [nodes]
+    GatewayAlert:
+      type: object
+      properties:
+        nodeId:
+          type: number
+        receivedAt:
+          type: number
+        eventClass:
+          $ref: "#/components/schemas/EventClass"
+        channel:
+          $ref: "#/components/schemas/SensingChannel"
+        confidence:
+          type: number
+        peakAmp:
+          type: number
+          description: >-
+            Seismic classes: peak band amplitude. wifi_presence: CSI motion
+            metric x100.
+        batteryMv:
+          type: [number, "null"]
+      required: [nodeId, receivedAt, eventClass, channel, confidence, peakAmp]
+    GatewayAlertList:
+      type: object
+      properties:
+        alerts:
+          type: array
+          items:
+            $ref: "#/components/schemas/GatewayAlert"
+      required: [alerts]
+    GatewayError:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]

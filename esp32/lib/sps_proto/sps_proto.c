@@ -67,6 +67,7 @@ void sps_heartbeat_write(const sps_heartbeat_t *hb, uint8_t out[SPS_HEARTBEAT_PL
     put16(out + 15, hb->noise_floor);
     out[17] = hb->fw_version;
     put16(out + 18, hb->reset_count);
+    put16(out + 20, hb->csi_noise);
 }
 void sps_heartbeat_read(const uint8_t in[SPS_HEARTBEAT_PLEN], sps_heartbeat_t *hb) {
     hb->timestamp    = get32(in);
@@ -77,6 +78,7 @@ void sps_heartbeat_read(const uint8_t in[SPS_HEARTBEAT_PLEN], sps_heartbeat_t *h
     hb->noise_floor  = get16(in + 15);
     hb->fw_version   = in[17];
     hb->reset_count  = get16(in + 18);
+    hb->csi_noise    = get16(in + 20);
 }
 
 void sps_ack_write(const sps_ack_t *a, uint8_t out[SPS_ACK_PLEN]) {
