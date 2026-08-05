@@ -37,6 +37,15 @@ static void IRAM_ATTR csi_rx_cb(void *ctx, wifi_csi_info_t *info) {
     (void)ctx;
     if (!s_instance || !info || !info->buf || info->len < 8) return;
 
+    /* Homogeneous input domain: the detector's moving variance assumes one
+     * stationary signal. Mixing legacy ESP-NOW pings with ambient HT
+     * traffic/beacons makes variance jump on traffic-mix changes alone
+     * (false positives). Accept only non-HT (legacy) frames short enough
+     * to be our 8-byte ESP-NOW pings — beacons are legacy too but run
+     * 100+ bytes, so the length gate rejects them. */
+    if (info->rx_ctrl.sig_mode != 0) return;      /* HT/VHT frame — skip */
+    if (info->rx_ctrl.sig_len > 64) return;       /* too big to be a ping */
+
     /* info->buf is interleaved int8 imag/real pairs. Use the middle
      * subcarriers (skip guard/DC region at both ends). */
     const int8_t *b = info->buf;
@@ -83,11 +92,12 @@ bool CsiSensor::begin(const NodeConfig &cfg) {
      * CSI hook — without promiscuous RX the callback never fires and
      * frames stays at 0 forever (bench-verified). Espressif's esp-csi
      * examples enable promiscuous mode for exactly this reason. */
-    esp_wifi_set_promiscuous(true);
+    if (esp_wifi_set_promiscuous(true) != ESP_OK) return false;
     wifi_promiscuous_filter_t filt = {};
     filt.filter_mask = WIFI_PROMIS_FILTER_MASK_DATA | WIFI_PROMIS_FILTER_MASK_MGMT;
-    esp_wifi_set_promiscuous_filter(&filt);
-    esp_wifi_set_channel(cfg.csi_wifi_channel, WIFI_SECOND_CHAN_NONE);
+    if (esp_wifi_set_promiscuous_filter(&filt) != ESP_OK) return false;
+    if (esp_wifi_set_channel(cfg.csi_wifi_channel, WIFI_SECOND_CHAN_NONE) != ESP_OK)
+        return false;
 
     /* CSI capture: match esp-csi example config — all LTF sources on,
      * merged, no channel filter. ESP-NOW pings arrive as legacy frames;
@@ -113,7 +123,7 @@ bool CsiSensor::begin(const NodeConfig &cfg) {
         peer.channel = cfg.csi_wifi_channel;
         peer.ifidx = WIFI_IF_STA;
         peer.encrypt = false;
-        esp_now_add_peer(&peer);
+        if (esp_now_add_peer(&peer) != ESP_OK) return false;
     }
 
     _running = true;

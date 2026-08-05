@@ -396,10 +396,11 @@ static void handleCli(String line) {
             return;
         }
         if (!csiOk) { Serial.println("[csi] init failed at boot"); return; }
-        Serial.printf("[csi] running=%d calibrating=%d frames=%lu noise=%u (x100) "
-                      "threshold=%.1f\n",
+        Serial.printf("[csi] running=%d calibrating=%d frames=%lu drops=%lu "
+                      "noise=%u (x100) threshold=%.1f\n",
                       (int)csi.running(), (int)csi.calibrating(),
-                      (unsigned long)csi.frameCount(), csi.noiseX100(),
+                      (unsigned long)csi.frameCount(),
+                      (unsigned long)csi.dropCount(), csi.noiseX100(),
                       cfg.csi_threshold);
         uint32_t secs = rest.isEmpty() ? 0 : (uint32_t)rest.toInt();
         if (secs > 0) {

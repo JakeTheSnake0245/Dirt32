@@ -50,6 +50,7 @@ public:
     uint16_t noiseX100() const;      /* quiescent baseline metric x100 */
     float    metric() const      { return _lastMetric; }  /* for CLI tuning */
     uint32_t frameCount() const  { return _frames; }
+    uint32_t dropCount() const   { return _drops; }   /* ring overruns */
 
     /* Suspend/resume ping TX around LoRa activity (coexistence: keeps the
        radio quiet while an alert burst + ACK window is in flight). */
@@ -60,8 +61,13 @@ public:
     void ingestTurbulence(float t) {
         _frames = _frames + 1;
         uint16_t h = _head;
+        uint16_t next = (uint16_t)((h + 1) % RING);
+        if (next == _tail) {          /* ring full: drop-newest, count it */
+            _drops = _drops + 1;
+            return;
+        }
         _ring[h] = t;
-        _head = (uint16_t)((h + 1) % RING);
+        _head = next;
     }
 
 private:
@@ -78,6 +84,7 @@ private:
     bool     _paused = false;
     uint32_t _lastPingMs = 0;
     volatile uint32_t _frames = 0;
+    volatile uint32_t _drops = 0;   /* ring-full drops (calibration validity) */
 
     /* ring of per-frame spatial turbulence values (written from WiFi task,
        read from loop; single-writer single-reader, index race is benign) */
